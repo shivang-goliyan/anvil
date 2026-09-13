@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs"
+    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
+    "target": "node --env-file=.env target/server.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.63.0"
