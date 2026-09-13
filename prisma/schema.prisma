@@ -9,25 +9,29 @@ datasource db {
   provider = "sqlite"
 }
 
-// healthy | repairing | degraded
+// status: deriving | healthy | repairing | degraded
+// engine: browser (plans driven through Anakin's browser), scrape (read-only, URL Scraper), wire (a prebuilt Wire action)
 model Capability {
   id          String   @id
   name        String
   goal        String
+  entryUrl    String?
   targetUrl   String
   inputSchema Json
   canary      String
+  engine      String   @default("browser")
   status      String   @default("healthy")
   planId      String?  @unique
   contractId  String?  @unique
   createdAt   DateTime @default(now())
 
-  plan      Plan?           @relation("activePlan", fields: [planId], references: [id])
-  contract  Contract?       @relation("activeContract", fields: [contractId], references: [id])
-  plans     Plan[]          @relation("plans")
-  contracts Contract[]      @relation("contracts")
-  runs      Run[]
-  repairs   RepairAttempt[]
+  plan        Plan?           @relation("activePlan", fields: [planId], references: [id])
+  contract    Contract?       @relation("activeContract", fields: [contractId], references: [id])
+  plans       Plan[]          @relation("plans")
+  contracts   Contract[]      @relation("contracts")
+  runs        Run[]
+  repairs     RepairAttempt[]
+  derivations Derivation[]
 }
 
 model Plan {
@@ -100,24 +104,43 @@ model RepairAttempt {
   @@index([capabilityId, outcome])
 }
 
-model TraceEvent {
-  id        Int      @id @default(autoincrement())
-  runId     String?
-  repairId  String?
-  seq       Int
-  kind      String
-  label     String
-  detail    Json?
-  createdAt DateTime @default(now())
+// Working out a first plan for a site from a goal. outcome: queued | running | derived | failed | capped
+model Derivation {
+  id           String   @id @default(cuid())
+  capabilityId String
+  entryUrl     String
+  outcome      String   @default("queued")
+  via          String?
+  operativeUrl String?
+  screenshot   String?
+  diagnosis    String?
+  createdAt    DateTime @default(now())
 
-  run    Run?           @relation(fields: [runId], references: [id], onDelete: Cascade)
-  repair RepairAttempt? @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  capability Capability   @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  trace      TraceEvent[]
+}
+
+model TraceEvent {
+  id           Int      @id @default(autoincrement())
+  runId        String?
+  repairId     String?
+  derivationId String?
+  seq          Int
+  kind         String
+  label        String
+  detail       Json?
+  createdAt    DateTime @default(now())
+
+  run        Run?           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  repair     RepairAttempt? @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  derivation Derivation?    @relation(fields: [derivationId], references: [id], onDelete: Cascade)
 
   @@unique([runId, seq])
   @@unique([repairId, seq])
+  @@unique([derivationId, seq])
 }
 
-// The queue the worker polls. kind is run | repair, refId points at that row.
+// The queue the worker polls. kind is run | repair | derive, refId points at that row.
 model Job {
   id        String    @id @default(cuid())
   kind      String
