@@ -8,6 +8,7 @@
     "target": "node --env-file=.env target/server.mjs"
   },
   "dependencies": {
+    "node-html-parser": "^9.0.4",
     "playwright-core": "^1.63.0"
   }
 }
