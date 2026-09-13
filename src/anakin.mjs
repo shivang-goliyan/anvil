@@ -55,10 +55,10 @@ async function waitFor(path, what, { every = 2000, limit = 90 } = {}) {
 }
 
 // Inline scrape, falling back to polling when the 90s inline window runs out (202).
-export async function scrape(url, { log, formats } = {}) {
+export async function scrape(url, { log, formats, useBrowser } = {}) {
   await mayFetch(url);
   const { used, cap } = await checkBudget(1);
-  let { status, json } = await request('POST', '/url-scraper/scrape', { url, ...(formats && { formats }) });
+  let { status, json } = await request('POST', '/url-scraper/scrape', { url, ...(formats && { formats }), ...(useBrowser && { useBrowser: true }) });
   for (let i = 0; status === 202 || json.status === 'pending' || json.status === 'processing'; i++) {
     if (i > 60) throw new AnakinError(`scrape of ${url} never finished`, { code: 'timeout' });
     await new Promise((r) => setTimeout(r, 2000));

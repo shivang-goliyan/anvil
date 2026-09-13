@@ -4,8 +4,10 @@ import { scrape, wireTask } from './anakin.mjs';
 import { mayFetch, NotAllowed } from './conduct.mjs';
 
 // Page fetcher for runReadPlan. Runs want today's page, so the scraper's 24h cache is skipped
-// with a throwaway query param, unless robots.txt objects to query strings.
-export function scrapeFetcher(log, { fresh = true } = {}) {
+// with a throwaway query param, unless robots.txt objects to query strings. `render` asks Anakin to
+// run the page's JavaScript first: plans are derived from a browser-rendered page (the screenshot
+// format turns the browser on), so runs have to see the same page or JS-built content is missing.
+export function scrapeFetcher(log, { fresh = true, render = false } = {}) {
   return async (url) => {
     let target = url;
     if (fresh) {
@@ -19,7 +21,7 @@ export function scrapeFetcher(log, { fresh = true } = {}) {
         log?.('conduct', 'robots.txt does not want query strings here, so this read may come from the 24h cache');
       }
     }
-    const job = await scrape(target, { log });
+    const job = await scrape(target, { log, useBrowser: render });
     return { html: job.html ?? '', url, markdown: job.markdown ?? '', cached: !!job.cached };
   };
 }

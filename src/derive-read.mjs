@@ -259,7 +259,7 @@ async function viaDerivation(cap, derivation, log) {
     for (const s of d.skipped) log('model', `skipped ${s}`);
     d.plan.steps = Array.isArray(d.plan.steps) ? d.plan.steps : [];
     const nav = d.plan.steps.find((s) => s.kind === 'navigate');
-    if (nav) nav.url = operative;
+    if (nav) Object.assign(nav, { url: operative, render: true });
     const check = dryRun(d, page, operative);
     log('derive', `attempt ${n}: plan from ${d.model} in ${(d.ms / 1000).toFixed(1)}s`, { model: d.model, fields: d.fields, canary: d.canary, steps: d.plan.steps, promptChars: d.promptChars });
     if (!check.problems.length) {
@@ -275,7 +275,7 @@ async function viaDerivation(cap, derivation, log) {
   // the real thing: a fresh read through the same runner every later run uses
   const result = await runReadPlan(derived.plan, {
     baseUrl: operative,
-    fetchPage: scrapeFetcher(log),
+    fetchPage: scrapeFetcher(log, { render: true }),
     onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.kind === 'navigate' ? s.url : s.each ?? s.selector ?? ''}`, { index: i, step: s }),
   });
   const empties = Object.keys(derived.fields).filter((f) => result.records.some((r) => r[f] === null));

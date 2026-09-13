@@ -16,7 +16,8 @@ const stepLabel = (i, s) => `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` 
 
 async function readAttempt(cap, log) {
   let last = null;
-  const fetchPage = scrapeFetcher(log);
+  // plans derived before JS rendering was switched on keep reading the plain page
+  const fetchPage = scrapeFetcher(log, { render: cap.plan.steps.some((s) => s.kind === 'navigate' && s.render) });
   try {
     const result = await runReadPlan(cap.plan, {
       baseUrl: cap.targetUrl,
