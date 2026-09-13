@@ -2,6 +2,7 @@
 
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from './db.mjs';
 import { cleanInputs, queueRun, queueRepair, Busy } from './jobs.mjs';
 import { createReadCapability, seedCapability } from './capabilities.mjs';
@@ -60,6 +61,30 @@ async function busyTierB() {
   const repair = await db.repairAttempt.findFirst({ where: { capabilityId: id, outcome: { in: ['queued', 'running'] } }, select: { id: true } });
   return run ? { runId: run.id } : repair ? { repairId: repair.id } : null;
 }
+
+// Anakin signs alerts as sha256=<hex HMAC of the raw body> with the monitor's secret.
+function signedByAnakin(raw, header, secret) {
+  const want = Buffer.from(`sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`);
+  const got = Buffer.from(String(header ?? ''));
+  return got.length === want.length && timingSafeEqual(got, want);
+}
+
+async function readRaw(req) {
+  const chunks = [];
+  let size = 0;
+  for await (const c of req) {
+    size += c.length;
+    if (size > 64_000) throw Object.assign(new Error('that request body is too big'), { status: 413 });
+    chunks.push(c);
+  }
+  return Buffer.concat(chunks);
+}
+
+// delivery ids stay the same when Anakin retries, so one change starts one repair
+const deliveries = new Set();
+
+const monitorInfo = () =>
+  process.env.ANAKIN_MONITOR_ID ? { everyMinutes: Number(process.env.ANAKIN_MONITOR_MINUTES ?? 240), page: '/harbor-lane/' } : null;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
@@ -134,7 +159,50 @@ const routes = [
     /^\/api\/target$/,
     async (req, res) => {
       const c = await targetAdmin('/_admin/config');
-      return send(res, 200, { ...c.described, kinds: c.kinds, owned: OWNED, busy: await busyTierB() });
+      return send(res, 200, { ...c.described, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/hooks\/site-changed$/,
+    async (req, res) => {
+      const secret = process.env.ANAKIN_WEBHOOK_SECRET;
+      if (!secret) return send(res, 404, { error: 'nothing here' });
+      const raw = await readRaw(req);
+      if (!signedByAnakin(raw, req.headers['x-anakin-signature'], secret)) return send(res, 401, { error: 'bad signature' });
+      const ts = Number(req.headers['x-anakin-timestamp']);
+      if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 600) return send(res, 401, { error: 'missing or stale timestamp' });
+      let alert;
+      try {
+        alert = JSON.parse(raw.toString('utf8'));
+      } catch {
+        return send(res, 400, { error: 'could not read that as JSON' });
+      }
+      const delivery = String(req.headers['x-anakin-delivery-id'] ?? '');
+      console.log(`webhook ${alert.type ?? '?'} from monitor ${alert.monitorId ?? '?'} delivery ${delivery}`);
+      if (alert.type !== 'monitor.change') return send(res, 200, { received: alert.type ?? 'unknown' });
+      // the dashboard's test alert looks like a real change but carries no change id (delivery id "test")
+      if (delivery === 'test' || !alert.changeId) return send(res, 200, { received: 'test alert, signature checks out, nothing to repair' });
+      if (process.env.ANAKIN_MONITOR_ID && alert.monitorId !== process.env.ANAKIN_MONITOR_ID) return send(res, 200, { ignored: 'not a monitor this deployment set up' });
+      if (delivery && deliveries.has(delivery)) return send(res, 200, { duplicate: true });
+      if (delivery) deliveries.add(delivery);
+      try {
+        const summary = alert.summary ? `: ${alert.summary}` : '';
+        const repair = await queueRepair(reserveRoom().id, { trigger: 'monitor', failure: `Anakin Website Monitoring saw the page change${summary}. No run has failed yet.` });
+        return send(res, 202, { repairId: repair.id });
+      } catch (err) {
+        if (err instanceof Busy) return send(res, 200, { ...err.existing, note: 'a repair was already on its way' });
+        throw err;
+      }
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/activity$/,
+    async (req, res, m, url) => {
+      const since = new Date(Number(url.searchParams.get('since')) || Date.now() - 60_000);
+      const repairs = await db.repairAttempt.findMany({ where: { createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, select: { id: true, capabilityId: true, trigger: true, outcome: true, createdAt: true } });
+      return send(res, 200, { now: Date.now(), repairs });
     },
   ],
   [

@@ -14,6 +14,7 @@
     "phase3": "node --env-file=.env scripts/phase3.mjs",
     "breaks": "node --env-file=.env scripts/breaks.mjs",
     "record-demo": "node --env-file=.env scripts/record-demo.mjs",
+    "monitor": "node --env-file=.env scripts/monitor.mjs",
     "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
     "test": "node --test \"test/*.test.mjs\""
   },
