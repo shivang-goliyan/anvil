@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
     "target": "node --env-file=.env target/server.mjs",
-    "phase1": "node --env-file=.env scripts/phase1.mjs"
+    "phase1": "node --env-file=.env scripts/phase1.mjs",
+    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs"
   },
   "dependencies": {
+    "@prisma/adapter-better-sqlite3": "7.10.0",
+    "@prisma/client": "7.10.0",
     "node-html-parser": "^9.0.4",
-    "playwright-core": "^1.63.0"
+    "playwright-core": "^1.63.0",
+    "prisma": "7.10.0"
   }
 }

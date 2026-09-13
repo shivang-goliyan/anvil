@@ -1,0 +1,153 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// healthy | repairing | degraded
+model Capability {
+  id          String   @id
+  name        String
+  goal        String
+  targetUrl   String
+  inputSchema Json
+  canary      String
+  status      String   @default("healthy")
+  planId      String?  @unique
+  contractId  String?  @unique
+  createdAt   DateTime @default(now())
+
+  plan      Plan?           @relation("activePlan", fields: [planId], references: [id])
+  contract  Contract?       @relation("activeContract", fields: [contractId], references: [id])
+  plans     Plan[]          @relation("plans")
+  contracts Contract[]      @relation("contracts")
+  runs      Run[]
+  repairs   RepairAttempt[]
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  capabilityId String
+  steps        Json
+  derivedFrom  String?
+  version      Int
+  active       Boolean  @default(false)
+  origin       String
+  createdAt    DateTime @default(now())
+
+  capability Capability  @relation("plans", fields: [capabilityId], references: [id], onDelete: Cascade)
+  activeFor  Capability? @relation("activePlan")
+  runs       Run[]
+
+  @@unique([capabilityId, version])
+}
+
+// SQLite has no scalar lists, so requiredFields is a JSON array of strings
+model Contract {
+  id             String   @id @default(cuid())
+  capabilityId   String
+  goldenSample   Json
+  requiredFields Json
+  fieldTypes     Json
+  minRecords     Int
+  bounds         Json
+  echoes         Json
+  createdAt      DateTime @default(now())
+
+  capability Capability  @relation("contracts", fields: [capabilityId], references: [id], onDelete: Cascade)
+  activeFor  Capability? @relation("activeContract")
+}
+
+// queued | running | succeeded | failed | capped
+model Run {
+  id           String    @id @default(cuid())
+  capabilityId String
+  planId       String?
+  inputs       Json
+  status       String    @default("queued")
+  result       Json?
+  failureKind  String?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime  @default(now())
+
+  capability Capability   @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  plan       Plan?        @relation(fields: [planId], references: [id])
+  trace      TraceEvent[]
+
+  @@index([capabilityId, status])
+}
+
+// outcome: queued | running | repaired | degraded | skipped | capped
+model RepairAttempt {
+  id           String   @id @default(cuid())
+  capabilityId String
+  fromPlanId   String?
+  toPlanId     String?
+  trigger      String
+  outcome      String   @default("queued")
+  diagnosis    String?
+  createdAt    DateTime @default(now())
+
+  capability Capability   @relation(fields: [capabilityId], references: [id], onDelete: Cascade)
+  trace      TraceEvent[]
+
+  @@index([capabilityId, outcome])
+}
+
+model TraceEvent {
+  id        Int      @id @default(autoincrement())
+  runId     String?
+  repairId  String?
+  seq       Int
+  kind      String
+  label     String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  run    Run?           @relation(fields: [runId], references: [id], onDelete: Cascade)
+  repair RepairAttempt? @relation(fields: [repairId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+  @@unique([repairId, seq])
+}
+
+// The queue the worker polls. kind is run | repair, refId points at that row.
+model Job {
+  id        String    @id @default(cuid())
+  kind      String
+  refId     String
+  payload   Json?
+  status    String    @default("queued")
+  tries     Int       @default(0)
+  runAfter  DateTime  @default(now())
+  lockedAt  DateTime?
+  error     String?
+  createdAt DateTime  @default(now())
+
+  @@index([status, runAfter])
+}
+
+// What a page looked like when a plan was derived from it. Plan.derivedFrom is the hash.
+model PageSnapshot {
+  hash      String   @id
+  url       String
+  shape     Json
+  createdAt DateTime @default(now())
+}
+
+// Every Anakin call we make, so the hourly cap has something to count.
+model CreditSpend {
+  id        Int      @id @default(autoincrement())
+  kind      String
+  credits   Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
