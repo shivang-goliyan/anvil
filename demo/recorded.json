@@ -1,0 +1,1073 @@
+{
+ "recordedAt": "2026-09-13T08:55:46.073Z",
+ "capability": "Reserve a study room",
+ "jobs": [
+  {
+   "type": "run",
+   "note": "A normal run on the cached plan.",
+   "subtitle": "plan v1",
+   "trace": [
+    {
+     "seq": 1,
+     "kind": "queued",
+     "label": "run queued, waiting for the worker",
+     "detail": {
+      "inputs": {
+       "name": "Priya Raman",
+       "email": "priya.raman@example.com",
+       "seats": 3
+      }
+     },
+     "createdAt": "2026-09-13T08:55:46.075Z"
+    },
+    {
+     "seq": 2,
+     "kind": "run",
+     "label": "running plan v1",
+     "detail": {
+      "planId": "cmtzkx02200003efjyqb3arq9",
+      "version": 1,
+      "try": 1
+     },
+     "createdAt": "2026-09-13T08:55:47.066Z"
+    },
+    {
+     "seq": 3,
+     "kind": "anakin",
+     "label": "browser session opened, 1 credit (80/100 this hour)",
+     "detail": {
+      "call": "browser",
+      "credits": 1
+     },
+     "createdAt": "2026-09-13T08:55:50.001Z"
+    },
+    {
+     "seq": 4,
+     "kind": "step",
+     "label": "1. navigate /",
+     "detail": {
+      "index": 0,
+      "step": {
+       "kind": "navigate",
+       "url": "/"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:50.118Z"
+    },
+    {
+     "seq": 5,
+     "kind": "step",
+     "label": "2. fill input[name=\"full_name\"]",
+     "detail": {
+      "index": 1,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:50.655Z"
+    },
+    {
+     "seq": 6,
+     "kind": "step",
+     "label": "3. fill input[name=\"email\"]",
+     "detail": {
+      "index": 2,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:51.846Z"
+    },
+    {
+     "seq": 7,
+     "kind": "step",
+     "label": "4. fill input[name=\"seats\"]",
+     "detail": {
+      "index": 3,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:52.293Z"
+    },
+    {
+     "seq": 8,
+     "kind": "step",
+     "label": "5. submit #reserve-form button[type=\"submit\"]",
+     "detail": {
+      "index": 4,
+      "step": {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:52.757Z"
+    },
+    {
+     "seq": 9,
+     "kind": "step",
+     "label": "6. assert #reference",
+     "detail": {
+      "index": 5,
+      "step": {
+       "kind": "assert",
+       "selector": "#reference"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:53.966Z"
+    },
+    {
+     "seq": 10,
+     "kind": "step",
+     "label": "7. extract reference, name, email, seats",
+     "detail": {
+      "index": 6,
+      "step": {
+       "kind": "extract",
+       "fields": {
+        "reference": {
+         "selector": "#reference",
+         "type": "string"
+        },
+        "name": {
+         "selector": ".summary-name",
+         "type": "string"
+        },
+        "email": {
+         "selector": ".summary-email",
+         "type": "string"
+        },
+        "seats": {
+         "selector": ".summary-seats",
+         "type": "number"
+        }
+       }
+      }
+     },
+     "createdAt": "2026-09-13T08:55:56.161Z"
+    },
+    {
+     "seq": 11,
+     "kind": "browser",
+     "label": "closed session after 6.9s",
+     "detail": {
+      "ms": 6894
+     },
+     "createdAt": "2026-09-13T08:55:57.017Z"
+    },
+    {
+     "seq": 12,
+     "kind": "result",
+     "label": "extracted 1 record",
+     "detail": {
+      "records": [
+       {
+        "reference": "HL-7733E8",
+        "name": "Priya Raman",
+        "email": "priya.raman@example.com",
+        "seats": 3
+       }
+      ]
+     },
+     "createdAt": "2026-09-13T08:55:57.018Z"
+    },
+    {
+     "seq": 13,
+     "kind": "contract",
+     "label": "golden sample captured. required: reference, name, email, seats",
+     "detail": {
+      "requiredFields": [
+       "reference",
+       "name",
+       "email",
+       "seats"
+      ],
+      "fieldTypes": {
+       "reference": "string",
+       "name": "string",
+       "email": "string",
+       "seats": "number"
+      },
+      "bounds": {
+       "seats": {
+        "min": 0,
+        "max": 30
+       }
+      },
+      "echoes": {
+       "name": "name",
+       "email": "email",
+       "seats": "seats"
+      }
+     },
+     "createdAt": "2026-09-13T08:55:57.026Z"
+    },
+    {
+     "seq": 14,
+     "kind": "done",
+     "label": "run succeeded",
+     "detail": {
+      "status": "succeeded",
+      "failureKind": null
+     },
+     "createdAt": "2026-09-13T08:55:57.027Z"
+    }
+   ],
+   "final": {
+    "run": {
+     "id": "cmtzkx02h00013efjuuho2xvh",
+     "capabilityId": "reserve-room",
+     "planId": "cmtzkx02200003efjyqb3arq9",
+     "inputs": {
+      "name": "Priya Raman",
+      "email": "priya.raman@example.com",
+      "seats": 3
+     },
+     "status": "succeeded",
+     "result": {
+      "records": [
+       {
+        "reference": "HL-7733E8",
+        "name": "Priya Raman",
+        "email": "priya.raman@example.com",
+        "seats": 3
+       }
+      ]
+     },
+     "failureKind": null,
+     "startedAt": "2026-09-13T08:55:47.059Z",
+     "endedAt": "2026-09-13T08:55:57.027Z",
+     "createdAt": "2026-09-13T08:55:46.073Z"
+    },
+    "capability": {
+     "name": "Reserve a study room",
+     "plan": {
+      "version": 1,
+      "origin": "hand-written"
+     }
+    }
+   }
+  },
+  {
+   "type": "run",
+   "note": "Then the demo site was changed: a \"check your details\" page now sits between the form and the booking. Same plan, same kind of run:",
+   "subtitle": "plan v1",
+   "trace": [
+    {
+     "seq": 1,
+     "kind": "queued",
+     "label": "run queued, waiting for the worker",
+     "detail": {
+      "inputs": {
+       "name": "Tomas Ortega",
+       "email": "tomas.ortega@example.com",
+       "seats": 5
+      }
+     },
+     "createdAt": "2026-09-13T08:55:57.126Z"
+    },
+    {
+     "seq": 2,
+     "kind": "run",
+     "label": "running plan v1",
+     "detail": {
+      "planId": "cmtzkx02200003efjyqb3arq9",
+      "version": 1,
+      "try": 1
+     },
+     "createdAt": "2026-09-13T08:55:58.033Z"
+    },
+    {
+     "seq": 3,
+     "kind": "anakin",
+     "label": "browser session opened, 1 credit (81/100 this hour)",
+     "detail": {
+      "call": "browser",
+      "credits": 1
+     },
+     "createdAt": "2026-09-13T08:56:00.885Z"
+    },
+    {
+     "seq": 4,
+     "kind": "step",
+     "label": "1. navigate /",
+     "detail": {
+      "index": 0,
+      "step": {
+       "kind": "navigate",
+       "url": "/"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:00.944Z"
+    },
+    {
+     "seq": 5,
+     "kind": "step",
+     "label": "2. fill input[name=\"full_name\"]",
+     "detail": {
+      "index": 1,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:01.446Z"
+    },
+    {
+     "seq": 6,
+     "kind": "step",
+     "label": "3. fill input[name=\"email\"]",
+     "detail": {
+      "index": 2,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:02.164Z"
+    },
+    {
+     "seq": 7,
+     "kind": "step",
+     "label": "4. fill input[name=\"seats\"]",
+     "detail": {
+      "index": 3,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:02.473Z"
+    },
+    {
+     "seq": 8,
+     "kind": "step",
+     "label": "5. submit #reserve-form button[type=\"submit\"]",
+     "detail": {
+      "index": 4,
+      "step": {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:02.813Z"
+    },
+    {
+     "seq": 9,
+     "kind": "step",
+     "label": "6. assert #reference",
+     "detail": {
+      "index": 5,
+      "step": {
+       "kind": "assert",
+       "selector": "#reference"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:03.705Z"
+    },
+    {
+     "seq": 10,
+     "kind": "browser",
+     "label": "closed session after 9.0s",
+     "detail": {
+      "ms": 9010
+     },
+     "createdAt": "2026-09-13T08:56:09.955Z"
+    },
+    {
+     "seq": 11,
+     "kind": "error",
+     "label": "step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
+     "detail": {
+      "reason": "selector-missing",
+      "step": 5,
+      "url": "https://harbor-lane.anvil.test/reserve/review?t=434a2d4c70c565be",
+      "docStatus": 200,
+      "pageAtFailure": {
+       "title": "Check your details · Harbor Lane Library",
+       "headings": [
+        "Check your details"
+       ],
+       "forms": [
+        {
+         "id": "confirm-form",
+         "action": "/reserve/confirm",
+         "method": "post",
+         "fields": [],
+         "buttons": [
+          {
+           "type": "submit",
+           "text": "Confirm reservation"
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "createdAt": "2026-09-13T08:56:09.955Z"
+    },
+    {
+     "seq": 12,
+     "kind": "triage",
+     "label": "structural: page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
+     "detail": {
+      "kind": "structural",
+      "canaryPresent": true
+     },
+     "createdAt": "2026-09-13T08:56:09.956Z"
+    },
+    {
+     "seq": 13,
+     "kind": "repair",
+     "label": "structural failure, queued a repair",
+     "detail": {
+      "repairId": "cmtzkxii0000143fjaxe28u7g"
+     },
+     "createdAt": "2026-09-13T08:56:09.962Z"
+    },
+    {
+     "seq": 14,
+     "kind": "done",
+     "label": "run failed (structural)",
+     "detail": {
+      "status": "failed",
+      "failureKind": "structural"
+     },
+     "createdAt": "2026-09-13T08:56:09.963Z"
+    }
+   ],
+   "final": {
+    "run": {
+     "id": "cmtzkx8lh00033efjcmcw1114",
+     "capabilityId": "reserve-room",
+     "planId": "cmtzkx02200003efjyqb3arq9",
+     "inputs": {
+      "name": "Tomas Ortega",
+      "email": "tomas.ortega@example.com",
+      "seats": 5
+     },
+     "status": "failed",
+     "result": {
+      "records": [],
+      "why": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
+      "repairId": "cmtzkxii0000143fjaxe28u7g"
+     },
+     "failureKind": "structural",
+     "startedAt": "2026-09-13T08:55:58.032Z",
+     "endedAt": "2026-09-13T08:56:09.963Z",
+     "createdAt": "2026-09-13T08:55:57.125Z"
+    },
+    "capability": {
+     "name": "Reserve a study room",
+     "plan": {
+      "version": 1,
+      "origin": "hand-written"
+     }
+    }
+   }
+  },
+  {
+   "type": "repair",
+   "subtitle": "from plan v1",
+   "trace": [
+    {
+     "seq": 1,
+     "kind": "queued",
+     "label": "repair queued (run-failure)",
+     "detail": {
+      "trigger": "run-failure",
+      "runId": "cmtzkx8lh00033efjcmcw1114"
+     },
+     "createdAt": "2026-09-13T08:56:09.962Z"
+    },
+    {
+     "seq": 2,
+     "kind": "repair",
+     "label": "repair started (run-failure), setting plan v1 aside",
+     "detail": {
+      "fromPlanId": "cmtzkx02200003efjyqb3arq9",
+      "failure": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded."
+     },
+     "createdAt": "2026-09-13T08:56:09.970Z"
+    },
+    {
+     "seq": 3,
+     "kind": "health",
+     "label": "capability marked repairing",
+     "detail": {
+      "status": "repairing"
+     },
+     "createdAt": "2026-09-13T08:56:09.971Z"
+    },
+    {
+     "seq": 4,
+     "kind": "attempt",
+     "label": "attempt 1 of 3",
+     "detail": {
+      "attempt": 1
+     },
+     "createdAt": "2026-09-13T08:56:09.971Z"
+    },
+    {
+     "seq": 5,
+     "kind": "anakin",
+     "label": "browser session opened, 1 credit (82/100 this hour)",
+     "detail": {
+      "call": "browser",
+      "credits": 1
+     },
+     "createdAt": "2026-09-13T08:56:13.041Z"
+    },
+    {
+     "seq": 6,
+     "kind": "read",
+     "label": "re-read the live page via browser session (target not public yet)",
+     "detail": {
+      "before": "8adb2fdfc7498992",
+      "after": "8adb2fdfc7498992"
+     },
+     "createdAt": "2026-09-13T08:56:13.633Z"
+    },
+    {
+     "seq": 7,
+     "kind": "diff",
+     "label": "no structural change detected on the entry page",
+     "detail": null,
+     "createdAt": "2026-09-13T08:56:13.634Z"
+    },
+    {
+     "seq": 8,
+     "kind": "derive",
+     "label": "skipped model key 1: model call failed (429): Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day",
+     "detail": null,
+     "createdAt": "2026-09-13T08:56:47.233Z"
+    },
+    {
+     "seq": 9,
+     "kind": "derive",
+     "label": "new plan from nex-agi/nex-n2.5-pro:free in 33.1s",
+     "detail": {
+      "model": "nex-agi/nex-n2.5-pro:free",
+      "ms": 33135,
+      "promptChars": 3079
+     },
+     "createdAt": "2026-09-13T08:56:47.233Z"
+    },
+    {
+     "seq": 10,
+     "kind": "plan",
+     "label": "candidate plan has 9 steps",
+     "detail": {
+      "steps": [
+       {
+        "kind": "navigate",
+        "url": "/"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"full_name\"]",
+        "value": "{{name}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"email\"]",
+        "value": "{{email}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"seats\"]",
+        "value": "{{seats}}"
+       },
+       {
+        "kind": "submit",
+        "selector": "#reserve-form button[type=\"submit\"]"
+       },
+       {
+        "kind": "assert",
+        "selector": "#confirm-form button"
+       },
+       {
+        "kind": "submit",
+        "selector": "#confirm-form button"
+       },
+       {
+        "kind": "assert",
+        "selector": "#reference"
+       },
+       {
+        "kind": "extract",
+        "fields": {
+         "reference": {
+          "selector": "#reference",
+          "type": "string"
+         },
+         "name": {
+          "selector": ".summary-name",
+          "type": "string"
+         },
+         "email": {
+          "selector": ".summary-email",
+          "type": "string"
+         },
+         "seats": {
+          "selector": ".summary-seats",
+          "type": "number"
+         }
+        }
+       }
+      ]
+     },
+     "createdAt": "2026-09-13T08:56:47.234Z"
+    },
+    {
+     "seq": 11,
+     "kind": "step",
+     "label": "1. navigate /",
+     "detail": {
+      "index": 0,
+      "step": {
+       "kind": "navigate",
+       "url": "/"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:47.234Z"
+    },
+    {
+     "seq": 12,
+     "kind": "step",
+     "label": "2. fill input[name=\"full_name\"]",
+     "detail": {
+      "index": 1,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:47.591Z"
+    },
+    {
+     "seq": 13,
+     "kind": "step",
+     "label": "3. fill input[name=\"email\"]",
+     "detail": {
+      "index": 2,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:48.224Z"
+    },
+    {
+     "seq": 14,
+     "kind": "step",
+     "label": "4. fill input[name=\"seats\"]",
+     "detail": {
+      "index": 3,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:48.511Z"
+    },
+    {
+     "seq": 15,
+     "kind": "step",
+     "label": "5. submit #reserve-form button[type=\"submit\"]",
+     "detail": {
+      "index": 4,
+      "step": {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:48.792Z"
+    },
+    {
+     "seq": 16,
+     "kind": "step",
+     "label": "6. assert #confirm-form button",
+     "detail": {
+      "index": 5,
+      "step": {
+       "kind": "assert",
+       "selector": "#confirm-form button"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:49.595Z"
+    },
+    {
+     "seq": 17,
+     "kind": "step",
+     "label": "7. submit #confirm-form button",
+     "detail": {
+      "index": 6,
+      "step": {
+       "kind": "submit",
+       "selector": "#confirm-form button"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:51.839Z"
+    },
+    {
+     "seq": 18,
+     "kind": "step",
+     "label": "8. assert #reference",
+     "detail": {
+      "index": 7,
+      "step": {
+       "kind": "assert",
+       "selector": "#reference"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:52.840Z"
+    },
+    {
+     "seq": 19,
+     "kind": "step",
+     "label": "9. extract reference, name, email, seats",
+     "detail": {
+      "index": 8,
+      "step": {
+       "kind": "extract",
+       "fields": {
+        "reference": {
+         "selector": "#reference",
+         "type": "string"
+        },
+        "name": {
+         "selector": ".summary-name",
+         "type": "string"
+        },
+        "email": {
+         "selector": ".summary-email",
+         "type": "string"
+        },
+        "seats": {
+         "selector": ".summary-seats",
+         "type": "number"
+        }
+       }
+      }
+     },
+     "createdAt": "2026-09-13T08:56:54.918Z"
+    },
+    {
+     "seq": 20,
+     "kind": "validate",
+     "label": "contract passed",
+     "detail": {
+      "records": [
+       {
+        "reference": "HL-42E3B2",
+        "name": "Tomas Ortega",
+        "email": "tomas.ortega@example.com",
+        "seats": 5
+       }
+      ],
+      "problems": []
+     },
+     "createdAt": "2026-09-13T08:56:55.673Z"
+    },
+    {
+     "seq": 21,
+     "kind": "promote",
+     "label": "plan v2 promoted, capability healthy",
+     "detail": {
+      "planId": "cmtzkyhrx000343fjdvmm9o76",
+      "version": 2
+     },
+     "createdAt": "2026-09-13T08:56:55.679Z"
+    }
+   ],
+   "final": {
+    "repair": {
+     "id": "cmtzkxii0000143fjaxe28u7g",
+     "capabilityId": "reserve-room",
+     "fromPlanId": "cmtzkx02200003efjyqb3arq9",
+     "toPlanId": "cmtzkyhrx000343fjdvmm9o76",
+     "trigger": "run-failure",
+     "outcome": "repaired",
+     "diagnosis": "no structural change detected on the entry page",
+     "createdAt": "2026-09-13T08:56:09.960Z"
+    },
+    "capability": {
+     "name": "Reserve a study room",
+     "plan": {
+      "version": 2,
+      "origin": "repair (nex-agi/nex-n2.5-pro:free)"
+     }
+    }
+   }
+  },
+  {
+   "type": "run",
+   "note": "And the next run on the repaired plan:",
+   "subtitle": "plan v2",
+   "trace": [
+    {
+     "seq": 1,
+     "kind": "queued",
+     "label": "run queued, waiting for the worker",
+     "detail": {
+      "inputs": {
+       "name": "Priya Raman",
+       "email": "priya.raman@example.com",
+       "seats": 3
+      }
+     },
+     "createdAt": "2026-09-13T08:56:56.282Z"
+    },
+    {
+     "seq": 2,
+     "kind": "run",
+     "label": "running plan v2",
+     "detail": {
+      "planId": "cmtzkyhrx000343fjdvmm9o76",
+      "version": 2,
+      "try": 1
+     },
+     "createdAt": "2026-09-13T08:56:56.737Z"
+    },
+    {
+     "seq": 3,
+     "kind": "anakin",
+     "label": "browser session opened, 1 credit (82/100 this hour)",
+     "detail": {
+      "call": "browser",
+      "credits": 1
+     },
+     "createdAt": "2026-09-13T08:56:59.567Z"
+    },
+    {
+     "seq": 4,
+     "kind": "step",
+     "label": "1. navigate /",
+     "detail": {
+      "index": 0,
+      "step": {
+       "kind": "navigate",
+       "url": "/"
+      }
+     },
+     "createdAt": "2026-09-13T08:56:59.626Z"
+    },
+    {
+     "seq": 5,
+     "kind": "step",
+     "label": "2. fill input[name=\"full_name\"]",
+     "detail": {
+      "index": 1,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:00.093Z"
+    },
+    {
+     "seq": 6,
+     "kind": "step",
+     "label": "3. fill input[name=\"email\"]",
+     "detail": {
+      "index": 2,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:00.711Z"
+    },
+    {
+     "seq": 7,
+     "kind": "step",
+     "label": "4. fill input[name=\"seats\"]",
+     "detail": {
+      "index": 3,
+      "step": {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:00.999Z"
+    },
+    {
+     "seq": 8,
+     "kind": "step",
+     "label": "5. submit #reserve-form button[type=\"submit\"]",
+     "detail": {
+      "index": 4,
+      "step": {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:01.285Z"
+    },
+    {
+     "seq": 9,
+     "kind": "step",
+     "label": "6. assert #confirm-form button",
+     "detail": {
+      "index": 5,
+      "step": {
+       "kind": "assert",
+       "selector": "#confirm-form button"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:02.076Z"
+    },
+    {
+     "seq": 10,
+     "kind": "step",
+     "label": "7. submit #confirm-form button",
+     "detail": {
+      "index": 6,
+      "step": {
+       "kind": "submit",
+       "selector": "#confirm-form button"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:04.210Z"
+    },
+    {
+     "seq": 11,
+     "kind": "step",
+     "label": "8. assert #reference",
+     "detail": {
+      "index": 7,
+      "step": {
+       "kind": "assert",
+       "selector": "#reference"
+      }
+     },
+     "createdAt": "2026-09-13T08:57:05.262Z"
+    },
+    {
+     "seq": 12,
+     "kind": "step",
+     "label": "9. extract reference, name, email, seats",
+     "detail": {
+      "index": 8,
+      "step": {
+       "kind": "extract",
+       "fields": {
+        "reference": {
+         "selector": "#reference",
+         "type": "string"
+        },
+        "name": {
+         "selector": ".summary-name",
+         "type": "string"
+        },
+        "email": {
+         "selector": ".summary-email",
+         "type": "string"
+        },
+        "seats": {
+         "selector": ".summary-seats",
+         "type": "number"
+        }
+       }
+      }
+     },
+     "createdAt": "2026-09-13T08:57:07.472Z"
+    },
+    {
+     "seq": 13,
+     "kind": "browser",
+     "label": "closed session after 8.7s",
+     "detail": {
+      "ms": 8725
+     },
+     "createdAt": "2026-09-13T08:57:08.353Z"
+    },
+    {
+     "seq": 14,
+     "kind": "result",
+     "label": "extracted 1 record",
+     "detail": {
+      "records": [
+       {
+        "reference": "HL-1B88B7",
+        "name": "Priya Raman",
+        "email": "priya.raman@example.com",
+        "seats": 3
+       }
+      ]
+     },
+     "createdAt": "2026-09-13T08:57:08.353Z"
+    },
+    {
+     "seq": 15,
+     "kind": "contract",
+     "label": "contract passed",
+     "detail": {
+      "problems": []
+     },
+     "createdAt": "2026-09-13T08:57:08.354Z"
+    },
+    {
+     "seq": 16,
+     "kind": "done",
+     "label": "run succeeded",
+     "detail": {
+      "status": "succeeded",
+      "failureKind": null
+     },
+     "createdAt": "2026-09-13T08:57:08.354Z"
+    }
+   ],
+   "final": {
+    "run": {
+     "id": "cmtzkyi8p00053efjxhhwezge",
+     "capabilityId": "reserve-room",
+     "planId": "cmtzkyhrx000343fjdvmm9o76",
+     "inputs": {
+      "name": "Priya Raman",
+      "email": "priya.raman@example.com",
+      "seats": 3
+     },
+     "status": "succeeded",
+     "result": {
+      "records": [
+       {
+        "reference": "HL-1B88B7",
+        "name": "Priya Raman",
+        "email": "priya.raman@example.com",
+        "seats": 3
+       }
+      ]
+     },
+     "failureKind": null,
+     "startedAt": "2026-09-13T08:56:56.736Z",
+     "endedAt": "2026-09-13T08:57:08.354Z",
+     "createdAt": "2026-09-13T08:56:56.281Z"
+    },
+    "capability": {
+     "name": "Reserve a study room",
+     "plan": {
+      "version": 2,
+      "origin": "repair (nex-agi/nex-n2.5-pro:free)"
+     }
+    }
+   }
+  }
+ ]
+}

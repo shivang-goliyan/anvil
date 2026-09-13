@@ -4,25 +4,64 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { db } from './db.mjs';
 import { cleanInputs, queueRun, queueRepair, Busy } from './jobs.mjs';
-import { createReadCapability } from './capabilities.mjs';
+import { createReadCapability, seedCapability } from './capabilities.mjs';
 import { onAllowlist, allowedSites } from './conduct.mjs';
+import { creditsUsed, hourlyCap } from './budget.mjs';
+import { reserveRoom } from '../capabilities/reserve-room.mjs';
 
 const PORT = Number(process.env.PORT ?? 3310);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const LIMITS = { write: 12, read: 300 }; // per IP per minute
+const TARGET_ADMIN = process.env.TARGET_ADMIN_URL || process.env.TARGET_FORWARD || 'http://localhost:4310';
+const WEB = new URL('../web/', import.meta.url);
+const DEMO = new URL('../demo/recorded.json', import.meta.url);
+// [requests, window] per IP. Breaking the demo site is the one people will want to spam.
+const LIMITS = { read: [300, 60_000], write: [12, 60_000], break: [6, 10 * 60_000] };
 
 const hits = new Map();
 function tooMany(ip, bucket) {
+  const [max, windowMs] = LIMITS[bucket];
   const key = `${bucket} ${ip}`;
   const now = Date.now();
   let h = hits.get(key);
-  if (!h || now - h.start >= 60_000) hits.set(key, (h = { start: now, n: 0 }));
-  return ++h.n > LIMITS[bucket];
+  if (!h || now - h.start >= windowMs) hits.set(key, (h = { start: now, n: 0 }));
+  return ++h.n > max;
 }
 setInterval(() => {
-  const cutoff = Date.now() - 60_000;
-  for (const [k, h] of hits) if (h.start < cutoff) hits.delete(k);
+  const now = Date.now();
+  for (const [k, h] of hits) if (now - h.start > LIMITS[k.split(' ')[0]][1]) hits.delete(k);
 }, 60_000).unref();
+
+async function targetAdmin(path, body) {
+  const res = await fetch(new URL(path, TARGET_ADMIN), {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: { 'x-admin-token': process.env.TARGET_ADMIN_TOKEN ?? '', 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(10_000),
+  }).catch(() => null);
+  if (!res) throw Object.assign(new Error('the demo site is not answering right now'), { status: 502 });
+  const json = await res.json();
+  if (!res.ok) throw Object.assign(new Error(json.error ?? 'the demo site refused that'), { status: res.status });
+  return json;
+}
+
+const OWNED = 'Harbor Lane Library is a demo site that belongs to this project. Anvil can only be shown breaking and repairing on a site we control, because you cannot break a site you do not own.';
+
+async function budget() {
+  const [used, cap] = [await creditsUsed(), hourlyCap()];
+  return { used, cap, capped: used >= cap };
+}
+
+const cappedReply = (res, b) =>
+  send(res, 503, { capped: true, error: `Anvil has used its Anakin budget for this hour (${b.used} of ${b.cap} credits), so nothing live can run right now`, demo: '/api/demo' });
+
+async function busyTierB() {
+  const id = reserveRoom().id;
+  const run = await db.run.findFirst({ where: { capabilityId: id, status: { in: ['queued', 'running'] } }, select: { id: true } });
+  const repair = await db.repairAttempt.findFirst({ where: { capabilityId: id, outcome: { in: ['queued', 'running'] } }, select: { id: true } });
+  return run ? { runId: run.id } : repair ? { repairId: repair.id } : null;
+}
+
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 
 // Behind Caddy + Cloudflare the socket address is always the proxy.
 const clientIp = (req) =>
@@ -60,6 +99,62 @@ const traceSince = (where, after) =>
 
 const routes = [
   [
+    'GET',
+    /^\/(|app\.js|style\.css|favicon\.svg)$/,
+    async (req, res, [file]) => {
+      const name = file || 'index.html';
+      const body = await readFile(new URL(name, WEB)).catch(() => null);
+      if (!body) return send(res, 404, { error: 'nothing here' });
+      res.writeHead(200, { 'content-type': TYPES[name.slice(name.lastIndexOf('.'))], 'cache-control': 'no-store' });
+      return res.end(body);
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/capabilities$/,
+    async (req, res) => {
+      const caps = await db.capability.findMany({ orderBy: { createdAt: 'asc' }, include: { plan: { select: { version: true, origin: true } } } });
+      return send(res, 200, {
+        capabilities: caps.map((c) => ({ id: c.id, name: c.name, goal: c.goal, engine: c.engine, status: c.status, targetUrl: c.targetUrl, inputSchema: c.inputSchema, plan: c.plan })),
+        allowedSites: allowedSites(),
+      });
+    },
+  ],
+  ['GET', /^\/api\/budget$/, async (req, res) => send(res, 200, await budget())],
+  [
+    'GET',
+    /^\/api\/demo$/,
+    async (req, res) => {
+      const body = await readFile(DEMO, 'utf8').catch(() => null);
+      return body ? send(res, 200, JSON.parse(body)) : send(res, 404, { error: 'no recorded run has been saved on this deployment' });
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/target$/,
+    async (req, res) => {
+      const c = await targetAdmin('/_admin/config');
+      return send(res, 200, { ...c.described, kinds: c.kinds, owned: OWNED, busy: await busyTierB() });
+    },
+  ],
+  [
+    'POST',
+    /^\/api\/target\/(break|reset)$/,
+    async (req, res, [action], url, ip) => {
+      if (tooMany(ip, 'break')) return send(res, 429, { error: 'you have broken the site a lot in the last ten minutes, give it a rest for a bit' }, { 'retry-after': '600' });
+      const body = await readJson(req);
+      const busy = await busyTierB();
+      if (busy) return send(res, 409, { error: 'a run or repair is in flight on the demo site, wait for it to finish', ...busy });
+      if (action === 'reset') {
+        const c = await targetAdmin('/_admin/reset', {});
+        await seedCapability(reserveRoom(), { reset: true });
+        return send(res, 200, { detail: 'the site and the capability are back to how they started', ...c.described });
+      }
+      const c = await targetAdmin('/_admin/break', { kind: body.kind, key: 'email' });
+      return send(res, 200, { changed: c.changed, detail: c.detail, ...c.described });
+    },
+  ],
+  [
     'POST',
     /^\/api\/capabilities$/,
     async (req, res) => {
@@ -75,6 +170,8 @@ const routes = [
       if (goal.length < 10 || goal.length > 300) return send(res, 400, { error: 'describe the goal in 10 to 300 characters' });
       // the allowlist is cheap to check here; robots.txt is checked by the worker before it fetches anything
       if (!onAllowlist(url.toString())) return send(res, 403, { error: `${url.hostname} is not on this deployment's allowlist`, allowed: allowedSites() });
+      const b = await budget();
+      if (b.capped) return cappedReply(res, b);
       const busy = await db.derivation.count({ where: { outcome: { in: ['queued', 'running'] } } });
       if (busy >= 3) return send(res, 429, { error: 'a few capabilities are already being worked out, try again in a minute' });
       const { cap, derivation } = await createReadCapability({ url: url.toString(), goal, name: body.name });
@@ -128,6 +225,8 @@ const routes = [
       if (!cap.planId) return send(res, 409, { error: cap.status === 'deriving' ? 'this capability is still being worked out' : 'this capability has no plan to run' });
       const { inputs, error } = cleanInputs(cap.inputSchema, body.inputs);
       if (error) return send(res, 400, { error });
+      const b = await budget();
+      if (b.capped) return cappedReply(res, b);
       try {
         const run = await queueRun(cap.id, inputs);
         return send(res, 202, { id: run.id, status: run.status, poll: `/api/runs/${run.id}` });
@@ -186,7 +285,7 @@ const server = createServer(async (req, res) => {
       const m = url.pathname.match(pattern);
       if (!m) continue;
       if (req.method !== method) continue;
-      return await handler(req, res, m.slice(1), url);
+      return await handler(req, res, m.slice(1), url, ip);
     }
     send(res, 404, { error: 'nothing here' });
   } catch (err) {
