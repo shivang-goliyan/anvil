@@ -160,6 +160,17 @@ const routes = [
     },
   ],
   [
+    // The side panel's preview of the demo site's first page. Sent as JSON because Cloudflare injects
+    // its bot-detection script into HTML responses, and that script errors inside a sandboxed frame.
+    'GET',
+    /^\/api\/target\/page$/,
+    async (req, res) => {
+      const page = await fetch(new URL('/', TARGET_ADMIN)).catch(() => null);
+      if (!page?.ok) return send(res, 502, { error: 'the demo site is not answering' });
+      return send(res, 200, { html: await page.text() });
+    },
+  ],
+  [
     // Caddy serves this read-only view in production. Same thing here, for running it locally.
     'GET',
     /^\/harbor-lane(\/.*)?$/,

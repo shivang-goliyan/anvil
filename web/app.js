@@ -961,7 +961,9 @@ async function loadTarget() {
   renderBrowser(json);
   if (shownVersion !== json.version) {
     shownVersion = json.version;
-    $('site-frame').src = `/harbor-lane/?v=${json.version}`;
+    const preview = await api('GET', '/api/target/page');
+    if (preview.status === 200) $('site-frame').srcdoc = preview.json.html;
+    else shownVersion = null;
   }
   $('site-version').textContent = json.breaks.length ? `changed ${json.breaks.length}×` : 'as built';
   $('site-version').classList.toggle('hot', json.breaks.length > 0);
