@@ -6,8 +6,9 @@
 
 const PROVIDERS = {
   openrouter: { base: 'https://openrouter.ai/api/v1', keys: ['OPENROUTER_API_KEY', 'OPENROUTER_API_KEY_2'] },
-  groq: { base: 'https://api.groq.com/openai/v1', keys: ['GROQ_API_KEY'] },
-  gemini: { base: 'https://generativelanguage.googleapis.com/v1beta/openai', keys: ['GEMINI_API_KEY'] },
+  groq: { base: 'https://api.groq.com/openai/v1', keys: ['GROQ_API_KEY', 'GROQ_API_KEY_2', 'GROQ_API_KEY_3'] },
+  // free-tier limits are per key, so several keys are tried in turn
+  gemini: { base: 'https://generativelanguage.googleapis.com/v1beta/openai', keys: ['GEMINI_API_KEY', ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => `GEMINI_API_KEY_${n}`)] },
 };
 
 export class LlmError extends Error {
