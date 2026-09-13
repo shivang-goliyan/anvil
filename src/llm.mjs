@@ -1,6 +1,14 @@
-// The only file that knows which model provider we use. Swap it here.
+// The only file that knows which model providers we use. Swap them here.
+//
+// LLM_MODEL is a comma-separated chain, tried in order: "groq:<model>, gemini:<model>, <openrouter model>".
+// A bare model name means OpenRouter (or LLM_BASE_URL, when that is set). All of them speak the
+// OpenAI chat completions format, and all have a free tier.
 
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const PROVIDERS = {
+  openrouter: { base: 'https://openrouter.ai/api/v1', keys: ['OPENROUTER_API_KEY', 'OPENROUTER_API_KEY_2'] },
+  groq: { base: 'https://api.groq.com/openai/v1', keys: ['GROQ_API_KEY'] },
+  gemini: { base: 'https://generativelanguage.googleapis.com/v1beta/openai', keys: ['GEMINI_API_KEY'] },
+};
 
 export class LlmError extends Error {
   constructor(message, { status, retryable = false, quota = false } = {}) {
@@ -19,61 +27,78 @@ function pullJson(content) {
   return JSON.parse(body);
 }
 
+function chain(list) {
+  return String(list ?? '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [head, ...rest] = entry.split(':');
+      if (PROVIDERS[head] && rest.length) return { provider: head, model: rest.join(':'), label: entry };
+      const base = process.env.LLM_BASE_URL;
+      return base ? { provider: 'custom', base, model: entry, label: entry } : { provider: 'openrouter', model: entry, label: entry };
+    });
+}
+
+function keysFor(entry) {
+  if (entry.provider === 'custom') return [process.env.LLM_API_KEY?.trim() || 'none'];
+  return PROVIDERS[entry.provider].keys.map((k) => process.env[k]?.trim()).filter(Boolean);
+}
+
 // A model that just failed (overloaded, rate limited, empty answer) sits out for a while, so the
 // next call goes straight to one that is working instead of waiting on it again.
 const COOLDOWN_MS = 10 * 60 * 1000;
 const benched = new Map();
 
-// Free keys get a daily request allowance. A key that runs out rests until the next UTC midnight.
-const keys = () => [process.env.OPENROUTER_API_KEY, process.env.OPENROUTER_API_KEY_2].map((k) => k?.trim()).filter(Boolean);
+// Free keys get a daily allowance. A key that runs out rests until the next UTC midnight.
 const emptyUntil = new Map();
 const nextUtcMidnight = () => new Date(new Date().setUTCHours(24, 0, 0, 0)).getTime();
 
-// LLM_MODEL can be a comma-separated list; free models get overloaded, so we walk down it.
 export async function askForJson({ system, prompt, model = process.env.LLM_MODEL, timeoutMs = 120_000 }) {
-  const all = String(model ?? '').split(',').map((m) => m.trim()).filter(Boolean);
-  if (!all.length) throw new LlmError('LLM_MODEL is not set');
-  if (!keys().length) throw new LlmError('OPENROUTER_API_KEY is missing');
-  const skipped = [];
+  const entries = chain(model);
+  if (!entries.length) throw new LlmError('LLM_MODEL is not set');
 
-  for (const [i, apiKey] of keys().entries()) {
-    if (emptyUntil.get(apiKey) > Date.now()) {
-      skipped.push(`key ${i + 1}: no free requests left today`);
-      continue;
-    }
-    const rested = all.filter((m) => !(benched.get(m) > Date.now()));
-    const models = rested.length ? rested : all;
-    for (const m of all) if (!models.includes(m)) skipped.push(`${m}: sitting out after a recent failure`);
-    for (const m of models) {
-      try {
-        const out = await askOne({ system, prompt, model: m, timeoutMs, apiKey });
-        benched.delete(m);
-        return { ...out, skipped };
-      } catch (err) {
-        if (err.quota) {
-          emptyUntil.set(apiKey, nextUtcMidnight());
-          skipped.push(`key ${i + 1}: ${err.message}`);
-          break;
-        }
-        if (err.retryable) benched.set(m, Date.now() + COOLDOWN_MS);
-        if (!err.retryable || m === models.at(-1)) {
-          err.message = skipped.length ? `${err.message} (after skipping ${skipped.join('; ')})` : err.message;
-          throw err;
-        }
-        skipped.push(`${m}: ${err.message}`);
+  const attempts = entries.flatMap((entry) => keysFor(entry).map((key, i) => ({ entry, key, keyLabel: `${entry.provider} key ${i + 1}` })));
+  if (!attempts.length) throw new LlmError('no API key is set for any model in LLM_MODEL');
+
+  const usable = (a) => !(emptyUntil.get(a.key) > Date.now());
+  const rested = attempts.filter((a) => usable(a) && !(benched.get(a.entry.label) > Date.now()));
+  // if everything is sitting out, try the ones that still have requests left anyway
+  const order = rested.length ? rested : attempts.filter(usable);
+  const skipped = attempts.filter((a) => !order.includes(a)).map((a) => `${a.entry.label} (${usable(a) ? 'sitting out after a recent failure' : `${a.keyLabel} has no free requests left today`})`);
+
+  let last = null;
+  let onlyQuota = true;
+  for (const a of order) {
+    try {
+      const out = await askOne({ ...a.entry, system, prompt, apiKey: a.key, timeoutMs });
+      benched.delete(a.entry.label);
+      return { ...out, skipped: [...new Set(skipped)] };
+    } catch (err) {
+      last = err;
+      if (err.quota) {
+        emptyUntil.set(a.key, nextUtcMidnight());
+        skipped.push(`${a.keyLabel}: out of free requests for today`);
+        continue;
       }
+      onlyQuota = false;
+      benched.set(a.entry.label, Date.now() + COOLDOWN_MS);
+      skipped.push(`${a.entry.label}: ${err.message}`);
     }
   }
-  throw new LlmError(`every model key is out of free requests for today (${skipped.join('; ')})`, { status: 429, quota: true });
+  if (onlyQuota || !last) throw new LlmError(`every model key is out of free requests for today (${[...new Set(skipped)].join('; ')})`, { status: 429, quota: true });
+  last.message = `${last.message} (tried ${[...new Set(skipped)].join('; ')})`;
+  throw last;
 }
 
-async function askOne({ system, prompt, model, timeoutMs, apiKey }) {
+async function askOne({ provider, base, model, system, prompt, apiKey, timeoutMs }) {
+  const url = `${(base ?? PROVIDERS[provider].base).replace(/\/$/, '')}/chat/completions`;
   const started = Date.now();
   let res;
   try {
-    res = await fetch(ENDPOINT, {
+    res = await fetch(url, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'Anvil' },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...(provider === 'openrouter' && { 'X-Title': 'Anvil' }) },
       body: JSON.stringify({
         model,
         temperature: 0,
@@ -89,20 +114,22 @@ async function askOne({ system, prompt, model, timeoutMs, apiKey }) {
     throw new LlmError(`model request did not complete: ${err.message}`, { retryable: true });
   }
 
-  const body = await res.json().catch(() => ({}));
+  let body = await res.json().catch(() => ({}));
+  // Gemini's compatibility layer sometimes wraps errors in an array
+  if (Array.isArray(body)) body = body[0] ?? {};
   if (!res.ok || body.error) {
-    const status = body.error?.code ?? res.status;
+    const status = Number(body.error?.code) || res.status;
     const message = body.error?.message ?? res.statusText;
     throw new LlmError(`model call failed (${status}): ${message}`, {
       status,
-      // 402 is a paid model on an account with no credit left: move on to the next model
+      // 402 is a paid model on an account with no credit; everything here moves on to the next model anyway
       retryable: status === 429 || status === 402 || status >= 500,
-      quota: status === 429 && /per-day|per day/i.test(message),
+      quota: status === 429 && /per.?day|daily|RPD|free-models-per-day/i.test(message),
     });
   }
 
   const choice = body.choices?.[0];
-  if (!choice) throw new LlmError(`model sent no choices back${body.error ? `: ${body.error.message}` : ''} (keys: ${Object.keys(body).join(', ') || 'none'})`, { retryable: true });
+  if (!choice) throw new LlmError(`model sent no choices back (keys: ${Object.keys(body).join(', ') || 'none'})`, { retryable: true });
   const content = choice?.message?.content;
   try {
     return { data: pullJson(content), model: body.model ?? model, ms: Date.now() - started, usage: body.usage };
