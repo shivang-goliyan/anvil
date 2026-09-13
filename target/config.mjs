@@ -15,6 +15,8 @@ export function freshConfig() {
     reviewStep: false,
     seatsFirst: false,
     receiptLayout: false,
+    formId: 'reserve-form',
+    confirm: { reference: 'reference', name: 'summary-name', email: 'summary-email', seats: 'summary-seats' },
     breaks: [],
   };
 }
@@ -24,7 +26,53 @@ export const BREAKS = {
   'add-step': 'Add a review step before the booking is made',
   'reorder-steps': 'Ask for seats first, on a page of their own',
   'restyle-confirmation': 'Rebuild the confirmation page markup',
+  surprise: 'A random change nobody scripted',
 };
+
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const tag = () => Math.random().toString(36).slice(2, 5);
+const SYNONYMS = {
+  name: { words: ['name', 'fullname', 'patron', 'guest', 'who'], labels: ['Your name', 'Name on the booking', 'Guest name', 'Who is booking?'] },
+  email: { words: ['email', 'mail', 'contact', 'inbox', 'address'], labels: ['Email address', 'Where should we write?', 'Contact email', 'Your e-mail'] },
+  seats: { words: ['seats', 'party', 'people', 'headcount', 'size'], labels: ['How many people?', 'Party size', 'Number of seats', 'Group size'] },
+};
+
+// Surprise: two or three mutations picked and named at random on the spot, so nobody, including
+// whoever wrote this demo, knows ahead of time what the plan will run into. At least one of them
+// always breaks the plan the capability has now.
+function surprise(config) {
+  const done = [];
+  const mutations = {
+    rename() {
+      const f = pick(config.fields);
+      const s = SYNONYMS[f.key];
+      const before = f.name;
+      f.name = `${pick(s.words)}_${tag()}`;
+      f.label = pick(s.labels.filter((l) => l !== f.label));
+      done.push(`the ${f.key} field is now name="${f.name}", labelled "${f.label}" (was "${before}")`);
+    },
+    shuffle() {
+      const before = config.fields.map((f) => f.key).join(', ');
+      for (let i = 0; i < 6 && config.fields.map((f) => f.key).join(', ') === before; i++) config.fields.sort(() => Math.random() - 0.5);
+      done.push(`the fields now come in the order ${config.fields.map((f) => f.label).join(', ')}`);
+    },
+    form() {
+      config.formId = `${pick(['book', 'booking', 'room', 'request', 'hold'])}-${tag()}`;
+      config.submitLabel = pick(['Book it', 'Confirm booking', 'Hold my room', 'Request room', 'Continue'].filter((l) => l !== config.submitLabel));
+      done.push(`the form is now #${config.formId} and its button says "${config.submitLabel}"`);
+    },
+    confirmation() {
+      const t = tag();
+      config.confirm = { reference: `${pick(['code', 'ref', 'booking', 'ticket'])}-${t}`, name: `who-${t}`, email: `mail-${t}`, seats: `count-${t}` };
+      done.push(`the confirmation page now shows the reference in #${config.confirm.reference}, with renamed detail classes`);
+    },
+  };
+  const breaking = pick(['rename', 'form', 'confirmation']);
+  const others = Object.keys(mutations).filter((k) => k !== breaking).sort(() => Math.random() - 0.5).slice(0, Math.random() < 0.5 ? 1 : 2);
+  for (const name of [breaking, ...others]) mutations[name]();
+  mark(config, { kind: 'surprise', changes: done });
+  return { changed: true, detail: done.join('; ') };
+}
 
 function mark(config, entry) {
   config.version += 1;
@@ -60,6 +108,7 @@ export function applyBreak(config, kind, key) {
   if (kind === 'add-step') return toggle(config, kind, 'reviewStep', 'bookings now go through a "check your details" page with its own confirm button');
   if (kind === 'reorder-steps') return toggle(config, kind, 'seatsFirst', 'the form is now two pages, seats first, then name and email');
   if (kind === 'restyle-confirmation') return toggle(config, kind, 'receiptLayout', 'the confirmation page was rebuilt with different markup');
+  if (kind === 'surprise') return surprise(config);
   throw new Error(`unknown break kind "${kind}"`);
 }
 

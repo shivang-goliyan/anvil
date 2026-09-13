@@ -57,7 +57,7 @@ ${body}
 
 const byKey = (key) => config.fields.find((f) => f.key === key);
 
-function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.key), id = 'reserve-form', action = '/reserve', button = config.submitLabel, token = null, step = null } = {}) {
+function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.key), id = config.formId, action = '/reserve', button = config.submitLabel, token = null, step = null } = {}) {
   const inputs = keys
     .map(byKey)
     .map((f) => {
@@ -123,11 +123,11 @@ function confirmationPage(r) {
     'Reservation confirmed',
     `<main class="confirmation">
 <h1>Room reserved</h1>
-<p>Your reference is <strong id="reference">${esc(r.reference)}</strong>. Show it at the front desk.</p>
+<p>Your reference is <strong id="${esc(config.confirm.reference)}">${esc(r.reference)}</strong>. Show it at the front desk.</p>
 <dl class="summary">
-  <dt>Name</dt><dd class="summary-name">${esc(r.name)}</dd>
-  <dt>Email</dt><dd class="summary-email">${esc(r.email)}</dd>
-  <dt>Seats</dt><dd class="summary-seats">${esc(r.seats)}</dd>
+  <dt>Name</dt><dd class="${esc(config.confirm.name)}">${esc(r.name)}</dd>
+  <dt>Email</dt><dd class="${esc(config.confirm.email)}">${esc(r.email)}</dd>
+  <dt>Seats</dt><dd class="${esc(config.confirm.seats)}">${esc(r.seats)}</dd>
 </dl>
 <p><a href="/">Make another reservation</a></p>
 </main>`,
@@ -186,7 +186,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     const seatsPage = (values, errors) => formPage(values, errors, { keys: ['seats'], id: 'party-form', action: '/reserve/seats', button: 'Continue', step: 'Step 1 of 2' });
-    const detailsPage = (values, errors, token) => formPage(values, errors, { keys: ['name', 'email'], token, step: 'Step 2 of 2' });
+    const detailsPage = (values, errors, token) => formPage(values, errors, { keys: config.fields.map((f) => f.key).filter((k) => k !== 'seats'), token, step: 'Step 2 of 2' });
     const book = (values) => {
       const reference = `HL-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
       reservations.set(reference, { reference, ...values });
