@@ -249,7 +249,8 @@
      "name": "Reserve a study room",
      "plan": {
       "version": 1,
-      "origin": "hand-written"
+      "origin": "hand-written",
+      "stepCount": 7
      }
     }
    }
@@ -470,7 +471,8 @@
      "name": "Reserve a study room",
      "plan": {
       "version": 1,
-      "origin": "hand-written"
+      "origin": "hand-written",
+      "stepCount": 7
      }
     }
    }
@@ -808,8 +810,125 @@
      "name": "Reserve a study room",
      "plan": {
       "version": 2,
-      "origin": "repair (nex-agi/nex-n2.5-pro:free)"
+      "origin": "repair (nex-agi/nex-n2.5-pro:free)",
+      "stepCount": 9
      }
+    },
+    "fromPlan": {
+     "version": 1,
+     "origin": "hand-written",
+     "steps": [
+      {
+       "kind": "navigate",
+       "url": "/"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      },
+      {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      },
+      {
+       "kind": "assert",
+       "selector": "#reference"
+      },
+      {
+       "kind": "extract",
+       "fields": {
+        "reference": {
+         "selector": "#reference",
+         "type": "string"
+        },
+        "name": {
+         "selector": ".summary-name",
+         "type": "string"
+        },
+        "email": {
+         "selector": ".summary-email",
+         "type": "string"
+        },
+        "seats": {
+         "selector": ".summary-seats",
+         "type": "number"
+        }
+       }
+      }
+     ]
+    },
+    "toPlan": {
+     "version": 2,
+     "origin": "repair (nex-agi/nex-n2.5-pro:free)",
+     "steps": [
+      {
+       "kind": "navigate",
+       "url": "/"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"full_name\"]",
+       "value": "{{name}}"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"email\"]",
+       "value": "{{email}}"
+      },
+      {
+       "kind": "fill",
+       "selector": "input[name=\"seats\"]",
+       "value": "{{seats}}"
+      },
+      {
+       "kind": "submit",
+       "selector": "#reserve-form button[type=\"submit\"]"
+      },
+      {
+       "kind": "assert",
+       "selector": "#confirm-form button"
+      },
+      {
+       "kind": "submit",
+       "selector": "#confirm-form button"
+      },
+      {
+       "kind": "assert",
+       "selector": "#reference"
+      },
+      {
+       "kind": "extract",
+       "fields": {
+        "reference": {
+         "selector": "#reference",
+         "type": "string"
+        },
+        "name": {
+         "selector": ".summary-name",
+         "type": "string"
+        },
+        "email": {
+         "selector": ".summary-email",
+         "type": "string"
+        },
+        "seats": {
+         "selector": ".summary-seats",
+         "type": "number"
+        }
+       }
+      }
+     ]
     }
    }
   },
@@ -1064,7 +1183,8 @@
      "name": "Reserve a study room",
      "plan": {
       "version": 2,
-      "origin": "repair (nex-agi/nex-n2.5-pro:free)"
+      "origin": "repair (nex-agi/nex-n2.5-pro:free)",
+      "stepCount": 9
      }
     }
    }

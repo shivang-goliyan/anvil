@@ -25,7 +25,7 @@ if (!failed) {
 const before = await db.run.findFirst({ where: { capabilityId: repair.capabilityId, status: 'succeeded', createdAt: { lt: failed.createdAt } }, orderBy: { createdAt: 'desc' } });
 const after = await db.run.findFirst({ where: { capabilityId: repair.capabilityId, status: 'succeeded', createdAt: { gt: repair.createdAt } }, orderBy: { createdAt: 'asc' } });
 const cap = await db.capability.findUnique({ where: { id: repair.capabilityId } });
-const planOf = async (id) => (id ? (await db.plan.findUnique({ where: { id }, select: { version: true, origin: true } })) : null);
+const planOf = async (id) => (id ? (await db.plan.findUnique({ where: { id }, select: { version: true, origin: true, steps: true } })) : null);
 
 async function runJob(run, note) {
   const trace = await db.traceEvent.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' }, select: pick });
@@ -39,7 +39,7 @@ jobs.push({
   type: 'repair',
   subtitle: `from plan v${(await planOf(repair.fromPlanId))?.version}`,
   trace: await db.traceEvent.findMany({ where: { repairId: repair.id }, orderBy: { seq: 'asc' }, select: pick }),
-  final: { repair, capability: { name: cap.name, plan: await planOf(repair.toPlanId) } },
+  final: { repair, capability: { name: cap.name, plan: await planOf(repair.toPlanId) }, fromPlan: await planOf(repair.fromPlanId), toPlan: await planOf(repair.toPlanId) },
 });
 if (after) jobs.push(await runJob(after, 'And the next run on the repaired plan:'));
 

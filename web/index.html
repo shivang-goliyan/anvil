@@ -3,69 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Anvil — an agent that repairs its own plan</title>
+<title>Anvil — a web agent that repairs itself when sites change</title>
+<meta name="description" content="Anvil books, fills and reads on real websites. When a site changes, it works out a new plan from the live page and keeps it only if the result still passes its contract. Break the demo site and watch.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="page">
-  <aside class="side">
-    <header class="masthead">
-      <h1>Anvil</h1>
-      <p class="lede">An agent that operates websites. When a site changes under it, it throws its plan away, works out a new one from the live page, and keeps it only if the result still passes the contract it learned the first time.</p>
-    </header>
 
+<header class="nav-wrap">
+  <nav class="nav">
+    <a class="brand" href="/" aria-label="Anvil home">anvil<i></i></a>
+    <label class="nav-cap">
+      <span class="sr">Capability</span>
+      <select id="capability"></select>
+    </label>
+    <span class="health" id="health" aria-live="polite"></span>
+    <div class="nav-end">
+      <button type="button" class="btn ghost" id="replay-button" title="Replays a real run recorded earlier. Costs nothing, and says it is a recording.">Watch a recorded run</button>
+      <a class="btn ghost hide-sm" href="https://github.com/shivang-goliyan/anvil" target="_blank" rel="noopener">Source</a>
+      <button type="button" class="btn blue" id="nav-run">Run</button>
+    </div>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="hero-title">
+    <p class="eyebrow"><span class="live-dot"></span>Live on real infrastructure · no setup</p>
+    <h1>Websites change.<br><em>Anvil repairs itself.</em></h1>
+  </div>
+  <div class="hero-copy">
+    <p class="lede">An agent that books, fills and reads on real websites. When a site changes under it, it doesn't patch a selector. It works out a whole new plan from the live page, and keeps it only if the result still passes what it learned the first time.</p>
     <ol class="howto">
-      <li>Run the reservation below. It books a real study room on the demo site.</li>
-      <li>Break the site with one of the buttons.</li>
-      <li>Run it again and watch it fail, repair itself, and book the room.</li>
+      <li><b>1</b><span>Run the booking</span></li>
+      <li><b>2</b><span>Break the site</span></li>
+      <li><b>3</b><span>Watch it repair</span></li>
     </ol>
+  </div>
 
-    <section class="block" id="capability-block">
-      <label class="field">
-        <span>Capability</span>
-        <select id="capability"></select>
-      </label>
-      <p class="health" id="health"></p>
-      <p class="goal" id="goal"></p>
-      <form id="run-form" autocomplete="off">
-        <div id="inputs"></div>
-        <button type="submit" id="run-button">Run</button>
-        <button type="button" id="repair-button" class="quiet" hidden>Repair now</button>
-      </form>
-      <p class="notice" id="run-notice" role="status"></p>
-    </section>
+  <form class="composer" id="run-form" autocomplete="off">
+    <p class="composer-kicker" id="composer-kicker">Try it</p>
+    <div class="sentence" id="sentence"></div>
+    <div class="composer-foot">
+      <button type="submit" class="btn blue big" id="run-button">Run it <span aria-hidden="true">→</span></button>
+      <button type="button" class="btn outline" id="repair-button" hidden>Repair now</button>
+    </div>
+    <p class="notice" id="run-notice" role="status"></p>
+  </form>
+</section>
 
-    <section class="block" id="site-block">
-      <h2>The demo site, right now</h2>
-      <p class="owned" id="owned"></p>
-      <p class="owned" id="monitor" hidden></p>
-      <ol class="pages" id="pages"></ol>
+<main class="stage">
+  <section class="timeline" id="timeline" aria-live="polite" aria-label="What Anvil did">
+    <div class="empty" id="empty">
+      <h2>The trace shows up here.</h2>
+      <p>Every run, repair and decision, in order, as it happens. Press <b>Run it</b>, or watch a recorded run first if you want to see the whole story without waiting.</p>
+    </div>
+  </section>
+
+  <aside class="rail">
+    <section class="card site-card" id="site-card">
+      <header class="card-head">
+        <h3>The demo site</h3>
+        <span class="tag" id="site-version"></span>
+      </header>
+      <div class="browser" id="browser"></div>
+      <p class="card-note" id="owned"></p>
       <div class="breaks" id="breaks"></div>
       <p class="notice" id="site-notice" role="status"></p>
+      <p class="card-note monitor" id="monitor" hidden></p>
     </section>
 
-    <section class="block" id="read-block">
-      <h2>Read another site</h2>
-      <p class="small">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the page and derives a plan. Read-only, robots.txt respected, allowlisted sites only: <span id="allowed"></span>.</p>
+    <section class="card" id="plans-card">
+      <header class="card-head"><h3>Plan history</h3><span class="tag" id="plans-count"></span></header>
+      <ol class="plans" id="plans"></ol>
+    </section>
+
+    <section class="card" id="anakin-card">
+      <header class="card-head"><h3>Anakin this hour</h3><span class="tag" id="credits"></span></header>
+      <div class="meter"><i id="credit-bar"></i></div>
+      <p class="card-note">Every run is live and costs real credits. Past the hourly budget, you get a recorded run instead, labelled as one.</p>
+    </section>
+
+    <details class="card read-card" id="read-card">
+      <summary><h3>Read another site</h3><span class="tag">beta</span></summary>
+      <p class="card-note">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the page and derives a plan. Read-only, robots.txt respected. Allowed: <span id="allowed"></span>.</p>
       <form id="read-form" autocomplete="off">
-        <label class="field"><span>Page</span><input name="url" type="url" placeholder="https://quotes.toscrape.com/" required></label>
-        <label class="field"><span>What you want</span><input name="goal" placeholder="the quotes with their author and tags" required minlength="10" maxlength="300"></label>
-        <button type="submit">Work it out</button>
+        <input name="url" type="url" placeholder="https://quotes.toscrape.com/" required aria-label="Page URL">
+        <input name="goal" placeholder="the quotes with their author and tags" required minlength="10" maxlength="300" aria-label="What you want">
+        <button type="submit" class="btn dark">Work it out</button>
       </form>
       <p class="notice" id="read-notice" role="status"></p>
-    </section>
-
-    <footer class="colophon">
-      <p>Every run is live: <a href="https://anakin.io">Anakin</a> drives a real browser, reads pages and runs Wire actions, and costs real credits. Past the hourly budget you get a recorded run, and it says so.</p>
-      <p>Plans are derived by free models, so a repair can take a minute. <a href="https://github.com/shivang-goliyan/anvil">Source</a>.</p>
-    </footer>
+    </details>
   </aside>
+</main>
 
-  <main class="trace" id="trace" aria-live="polite">
-    <p class="empty" id="empty">Nothing has run yet. The trace of every step, decision and repair shows up here, newest at the bottom.</p>
-  </main>
-</div>
+<footer class="deep">
+  <div class="deep-inner">
+    <p class="eyebrow light">How it works</p>
+    <h2><span>Most self-healing tools patch a selector.</span><br>Anvil re-derives the plan, then proves it.</h2>
+    <div class="pillars">
+      <article><b>01</b><h4>Triage first</h4><p>A network blip is retried, a bot block is reported, an empty page is fine. Only a real structural change triggers a repair.</p></article>
+      <article><b>02</b><h4>Whole-plan repair</h4><p>The model sees the goal, the old plan, what changed, and the exact page the old plan got stuck on, then writes every step again.</p></article>
+      <article><b>03</b><h4>Contract gate</h4><p>The first good run teaches types, bounds and echoes. A new plan is promoted only if its result passes. Three failures roll back, honestly.</p></article>
+      <article><b>04</b><h4>Before anything fails</h4><p>Anakin Website Monitoring watches the site. When it changes, a signed webhook starts the repair before anyone's run breaks.</p></article>
+    </div>
+    <div class="built">
+      <span>Built on Anakin</span>
+      <ul><li>Browser API</li><li>URL Scraper</li><li>Map</li><li>Crawl</li><li>Wire</li><li>Website Monitoring</li><li>Webhooks</li></ul>
+    </div>
+    <p class="fine">Harbor Lane Library is a demo site that belongs to this project, because you can't show an agent surviving changes on a site you're not allowed to change. <a href="https://github.com/shivang-goliyan/anvil#limitations">Known limitations</a> · <a href="https://github.com/shivang-goliyan/anvil">Source on GitHub</a></p>
+  </div>
+</footer>
+
 <script src="/app.js" type="module"></script>
 </body>
 </html>

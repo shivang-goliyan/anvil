@@ -115,8 +115,10 @@ async function readJson(req) {
 const afterSeq = (url) => Math.max(0, Number.parseInt(url.searchParams.get('after') ?? '0', 10) || 0);
 
 async function capabilitySummary(id) {
-  const cap = await db.capability.findUnique({ where: { id }, include: { plan: { select: { id: true, version: true, origin: true } } } });
-  return cap && { id: cap.id, name: cap.name, status: cap.status, engine: cap.engine, targetUrl: cap.targetUrl, plan: cap.plan };
+  const cap = await db.capability.findUnique({ where: { id }, include: { plan: { select: { id: true, version: true, origin: true, steps: true } } } });
+  if (!cap) return null;
+  const plan = cap.plan && { id: cap.plan.id, version: cap.plan.version, origin: cap.plan.origin, stepCount: Array.isArray(cap.plan.steps) ? cap.plan.steps.length : null };
+  return { id: cap.id, name: cap.name, status: cap.status, engine: cap.engine, targetUrl: cap.targetUrl, plan };
 }
 
 const traceSince = (where, after) =>
@@ -159,7 +161,8 @@ const routes = [
     /^\/api\/target$/,
     async (req, res) => {
       const c = await targetAdmin('/_admin/config');
-      return send(res, 200, { ...c.described, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
+      const site = { org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm };
+      return send(res, 200, { ...c.described, site, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
     },
   ],
   [
@@ -253,8 +256,10 @@ const routes = [
       const cap = await db.capability.findUnique({ where: { id }, include: { plan: true, contract: true } });
       if (!cap) return send(res, 404, { error: 'no capability with that id' });
       const { contract, plan, ...rest } = cap;
+      const plans = await db.plan.findMany({ where: { capabilityId: id }, orderBy: { version: 'asc' }, select: { version: true, origin: true, active: true, createdAt: true } });
       return send(res, 200, {
         ...rest,
+        plans,
         plan: plan && { id: plan.id, version: plan.version, origin: plan.origin, steps: plan.steps, createdAt: plan.createdAt },
         contract: contract && { requiredFields: contract.requiredFields, fieldTypes: contract.fieldTypes, minRecords: contract.minRecords, bounds: contract.bounds, sampleSize: contract.goldenSample?.records?.length ?? null },
       });
@@ -338,8 +343,9 @@ const routes = [
     async (req, res, [id], url) => {
       const repair = await db.repairAttempt.findUnique({ where: { id } });
       if (!repair) return send(res, 404, { error: 'no repair with that id' });
-      const [capability, trace] = await Promise.all([capabilitySummary(repair.capabilityId), traceSince({ repairId: id }, afterSeq(url))]);
-      return send(res, 200, { repair, capability, trace });
+      const planOf = (planId) => (planId ? db.plan.findUnique({ where: { id: planId }, select: { version: true, origin: true, steps: true } }) : null);
+      const [capability, trace, fromPlan, toPlan] = await Promise.all([capabilitySummary(repair.capabilityId), traceSince({ repairId: id }, afterSeq(url)), planOf(repair.fromPlanId), planOf(repair.toPlanId)]);
+      return send(res, 200, { repair, capability, trace, fromPlan, toPlan });
     },
   ],
 ];
