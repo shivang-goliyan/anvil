@@ -5,7 +5,7 @@ An agent that operates websites, and when a site changes under it, throws its pl
 **Try it: https://attirebytatsavi.com** — no key, no sign-up, no install.
 
 1. Run *Reserve a study room*. Anvil books a real room on the demo site through a remote browser and reads back the confirmation.
-2. Break the site with one of the four buttons: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page.
+2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick one of four specific breaks: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page.
 3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, checks it against the contract, promotes it, and the same booking goes through.
 
 Everything shows up as a trace: every step, decision, diff and model call, in order. The demo site belongs to this project. That is on purpose: you cannot show an agent surviving a site change on a site you are not allowed to change.
@@ -72,7 +72,7 @@ The *Read another site* form turns a URL and a sentence into a read capability (
 2. **Wire first.** If one of Anakin's 963 Wire catalogs covers the domain, `resolve-actions` ranks its actions for the goal, the model picks one that needs no login and fills its parameters, and a result with real records makes it the plan. No derivation.
 3. Otherwise **Map** the site, rank its links by the goal's words, and when URLs say nothing (`/pages/simple/`, `/table/?from=USD`) **Crawl** the entry page and let the model shortlist from the links' anchor text.
 4. **Crawl** from the best candidate and have the model pick the page that holds the data.
-5. **Scrape** that page as markdown, HTML and a screenshot.
+5. **Scrape** that page as markdown, HTML and a screenshot. The screenshot makes Anakin render the page's JavaScript, so every later read of that capability asks for rendering too; otherwise a JS-built page derives fine and then reads nothing (on quotes.toscrape.com/js/ a plain scrape saw 0 quotes, a rendered one 10).
 6. The model writes a `navigate` / `assert` / `extract` plan (with `each` for lists) against trimmed HTML. It is dry-run on the scraped page before a credit is spent running it, with problems fed back for up to three tries.
 7. A fresh read through the normal runner gives the golden sample and the contract.
 
@@ -119,9 +119,11 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **Triage** live: target stopped → transient, three tries, plan untouched; a real 403 → blocked and degraded; a degraded capability with a structural failure → no repair queued.
 - **Read capabilities** from sites never touched before: python.org upcoming events, x-rates.com USD rates, scrapethissite.com countries, quotes.toscrape.com quotes (all derived), and news.ycombinator.com via Wire's `hn_stories`. lobste.rs was refused before any credit was spent: its robots.txt disallows everything.
 - **Crash recovery**: a worker killed mid-repair had its job reclaimed and finished by a new worker.
+- **Surprise breaks** keep the demo site bookable: six random draws, some stacked on the review step and the seats-first flow, all booked through the changed markup over plain HTTP. Repairs against a surprise break use the same loop as the scripted breaks.
 
 ## Limitations
 
+- **Rendering JavaScript costs time.** A rendered read takes around 20 seconds instead of 4.
 - **Free models.** Plans come from free models through OpenRouter. A call takes 10 to 130 seconds, each account gets roughly 50 requests a day, and one of them sometimes answers with nothing. A repair can take a couple of minutes and, on a bad day, fail and degrade. Running out of requests stops repairs as `capped`.
 - **The demo site is not on the public internet for runs.** Anakin's browser loads a made-up origin (`harbor-lane.anvil.test`) and the worker answers those requests from the site running on the same machine. `/harbor-lane/` is a read-only public view for the monitor. So repairs re-read the page through the browser; the URL Scraper re-read path for public targets is written but was not exercised.
 - **Read capabilities are not repaired automatically yet.** Their runs are triaged, but a structural failure is only reported.
