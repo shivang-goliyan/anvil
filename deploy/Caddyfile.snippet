@@ -1,0 +1,5 @@
+# Anvil. The app sends Cache-Control: no-store on everything, which Cloudflare honours.
+attirebytatsavi.com, www.attirebytatsavi.com {
+	encode gzip
+	reverse_proxy 127.0.0.1:3310
+}

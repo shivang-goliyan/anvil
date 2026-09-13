@@ -1,0 +1,19 @@
+[Unit]
+Description=Anvil worker (runs, repairs, derivations)
+After=network-online.target
+After=anvil-target.service
+Wants=anvil-target.service
+
+[Service]
+User=ggtwo
+WorkingDirectory=/home/ggtwo/anvil
+ExecStart=/usr/bin/node --env-file=/home/ggtwo/anvil/.env src/worker.mjs
+Restart=always
+RestartSec=3
+MemoryMax=700M
+NoNewPrivileges=true
+# lets a run or repair in progress finish before the process goes
+TimeoutStopSec=150
+
+[Install]
+WantedBy=multi-user.target

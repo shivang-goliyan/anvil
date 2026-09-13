@@ -1,0 +1,15 @@
+[Unit]
+Description=Anvil demo target site (Harbor Lane Library)
+After=network-online.target
+
+[Service]
+User=ggtwo
+WorkingDirectory=/home/ggtwo/anvil
+ExecStart=/usr/bin/node --env-file=/home/ggtwo/anvil/.env target/server.mjs
+Restart=always
+RestartSec=3
+MemoryMax=150M
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Anvil API and web page
+After=network-online.target
+
+[Service]
+User=ggtwo
+WorkingDirectory=/home/ggtwo/anvil
+ExecStart=/usr/bin/node --env-file=/home/ggtwo/anvil/.env src/api.mjs
+Restart=always
+RestartSec=3
+MemoryMax=300M
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
