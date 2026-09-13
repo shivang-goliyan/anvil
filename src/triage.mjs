@@ -1,5 +1,6 @@
 import { StepError } from './plan.mjs';
 import { AnakinError } from './errors.mjs';
+import { NotAllowed } from './conduct.mjs';
 
 const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffic|verify you are human|cf-challenge/i;
 
@@ -7,6 +8,7 @@ const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffic|verif
 export function triage({ error, contractCheck, records, canaryPresent, pageText = '' }) {
   if (error) {
     const status = error.docStatus ?? error.status;
+    if (error instanceof NotAllowed) return { kind: 'blocked', why: `we may not fetch it: ${error.message}` };
     if (error instanceof AnakinError && ['auth', 'credits'].includes(error.code))
       return { kind: 'blocked', why: `our own Anakin account problem: ${error.message}` };
     if (error instanceof AnakinError && (['network', 'browser_unavailable'].includes(error.code) || error.status === 429 || error.status >= 500))
