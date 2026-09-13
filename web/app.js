@@ -794,6 +794,8 @@ function renderComposer(cap) {
   if (booking) {
     $('composer-kicker').textContent = 'Tell Anvil what to book · you can edit the details';
     box.append('Book a study room for ', input('name', 'string', sample.name), ' at ', input('email', 'string', sample.email), ' for ', input('seats', 'number', sample.seats), ' people.');
+    // measured once they are on the page; a detached input has no font to measure with
+    requestAnimationFrame(() => box.querySelectorAll('input').forEach(sizeInput));
   } else if (Object.keys(schema).length) {
     $('composer-kicker').textContent = cap.name;
     for (const [k, t] of Object.entries(schema)) box.append(`${k} `, input(k, t, ''), ' ');
