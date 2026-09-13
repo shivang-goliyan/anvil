@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
-    "target": "node --env-file=.env target/server.mjs"
+    "target": "node --env-file=.env target/server.mjs",
+    "phase1": "node --env-file=.env scripts/phase1.mjs"
   },
   "dependencies": {
     "node-html-parser": "^9.0.4",
