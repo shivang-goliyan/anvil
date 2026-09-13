@@ -341,6 +341,10 @@ export async function executeDerive(derivationId, log) {
       await log('budget', `${err.message}. Stopped before calling Anakin again`, { used: err.used, cap: err.cap });
       return finish('capped', 'degraded', err.message);
     }
+    if (err.quota) {
+      await log('budget', `${err.message}. Stopped here`, { modelQuota: true });
+      return finish('capped', 'degraded', err.message);
+    }
     if (err instanceof NotAllowed) {
       await log('conduct', `not fetching: ${err.message}`, { url: err.url, rule: err.rule ?? null });
       return finish('failed', 'degraded', err.message);

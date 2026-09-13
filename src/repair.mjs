@@ -126,9 +126,10 @@ export async function executeRepair(repairId, { failure, inputs } = {}, log) {
       log('promote', `plan v${plan.version} promoted, capability healthy`, { planId: plan.id, version: plan.version });
       ending = ['repaired', { toPlanId: plan.id, diagnosis: changes.join('; ') }];
     } catch (err) {
-      if (err instanceof OverBudget) {
+      if (err instanceof OverBudget || err.quota) {
+        // out of credits or out of model requests says nothing about the site, so no degrading
         await setStatus(cap.id, statusBefore);
-        log('budget', `${err.message}. Stopping the repair and leaving plan v${previous.version} in place`, { used: err.used, cap: err.cap });
+        log('budget', `${err.message}. Stopping the repair and leaving plan v${previous.version} in place`, { used: err.used ?? null, cap: err.cap ?? null, modelQuota: !!err.quota });
         ending = ['capped', { diagnosis: err.message }];
       } else {
         feedback = `Attempt crashed: ${err.message}`;
