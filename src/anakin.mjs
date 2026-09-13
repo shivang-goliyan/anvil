@@ -1,4 +1,8 @@
 import { chromium } from 'playwright-core';
+import { checkBudget, recordSpend, creditsUsed, hourlyCap } from './budget.mjs';
+import { AnakinError } from './errors.mjs';
+
+export { AnakinError };
 
 const API = 'https://api.anakin.io/v1';
 const BROWSER_WS = 'wss://api.anakin.io/v1/browser-connect';
@@ -7,14 +11,6 @@ function key() {
   const k = process.env.ANAKIN_API_KEY?.trim();
   if (!k) throw new Error('ANAKIN_API_KEY is missing');
   return k;
-}
-
-export class AnakinError extends Error {
-  constructor(message, { status, code } = {}) {
-    super(message);
-    this.status = status;
-    this.code = code;
-  }
 }
 
 async function request(method, path, body, timeoutMs = 120_000) {
@@ -35,7 +31,8 @@ async function request(method, path, body, timeoutMs = 120_000) {
 }
 
 // Inline scrape, falling back to polling when the 90s inline window runs out (202).
-export async function scrape(url) {
+export async function scrape(url, { log } = {}) {
+  const { used, cap } = await checkBudget(1);
   let { status, json } = await request('POST', '/url-scraper/scrape', { url });
   for (let i = 0; status === 202 || json.status === 'pending' || json.status === 'processing'; i++) {
     if (i > 60) throw new AnakinError(`scrape of ${url} never finished`, { code: 'timeout' });
@@ -43,12 +40,17 @@ export async function scrape(url) {
     ({ status, json } = await request('GET', `/url-scraper/${json.id}`));
   }
   if (json.status === 'failed') throw new AnakinError(json.error ?? 'scrape failed', { code: 'job_failed' });
+  // cached answers are free
+  const cost = json.cached ? 0 : 1;
+  await recordSpend('scrape', cost, url);
+  log?.('anakin', `url scraper, ${cost} credit${cost === 1 ? '' : 's'} (${used + cost}/${cap} this hour)`, { call: 'scrape', credits: cost, cached: !!json.cached });
   return json;
 }
 
 // Anakin sometimes has no warm browser ready (ws close 1013) or hiccups with a 503. Worth a retry.
 async function connect(log) {
   for (let n = 1; ; n++) {
+    await checkBudget(1);
     try {
       return await chromium.connectOverCDP(BROWSER_WS, { headers: { 'X-API-Key': key() }, timeout: 60_000 });
     } catch (err) {
@@ -69,6 +71,8 @@ async function connect(log) {
 // That lets the cloud browser drive a site that is not on the public internet yet.
 export async function openBrowser({ origin, forward, log } = {}) {
   const browser = await connect(log);
+  await recordSpend('browser', 1, 'session opened');
+  log?.('anakin', `browser session opened, 1 credit (${await creditsUsed()}/${hourlyCap()} this hour)`, { call: 'browser', credits: 1 });
   const context = browser.contexts()[0] ?? (await browser.newContext());
   const page = context.pages()[0] ?? (await context.newPage());
 
@@ -76,12 +80,17 @@ export async function openBrowser({ origin, forward, log } = {}) {
     await context.route(`${origin}/**`, async (route) => {
       const req = route.request();
       const path = req.url().slice(origin.length) || '/';
-      const res = await fetch(`${forward}${path}`, {
-        method: req.method(),
-        headers: { 'content-type': req.headers()['content-type'] ?? 'text/plain' },
-        body: ['GET', 'HEAD'].includes(req.method()) ? undefined : req.postData() ?? '',
-        redirect: 'manual',
-      });
+      let res;
+      try {
+        res = await fetch(`${forward}${path}`, {
+          method: req.method(),
+          headers: { 'content-type': req.headers()['content-type'] ?? 'text/plain' },
+          body: ['GET', 'HEAD'].includes(req.method()) ? undefined : req.postData() ?? '',
+          redirect: 'manual',
+        });
+      } catch {
+        return route.abort('connectionrefused');
+      }
       const headers = Object.fromEntries(res.headers);
       if (headers.location?.startsWith('/')) headers.location = `${origin}${headers.location}`;
       await route.fulfill({ status: res.status, headers, body: Buffer.from(await res.arrayBuffer()) });
@@ -100,7 +109,14 @@ export async function openBrowser({ origin, forward, log } = {}) {
     docStatus: () => lastDocStatus,
     async close() {
       await browser.close().catch(() => {});
-      return Date.now() - started;
+      const ms = Date.now() - started;
+      // billed per started 2 minutes, the first one was recorded on connect
+      const extra = Math.ceil(ms / 120_000) - 1;
+      if (extra > 0) {
+        await recordSpend('browser', extra, `session ran ${Math.round(ms / 1000)}s`);
+        log?.('anakin', `session ran past 2 minutes, ${extra} more credit${extra === 1 ? '' : 's'}`, { call: 'browser', credits: extra });
+      }
+      return ms;
     },
   };
 }

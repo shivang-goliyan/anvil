@@ -1,5 +1,5 @@
 import { StepError } from './plan.mjs';
-import { AnakinError } from './anakin.mjs';
+import { AnakinError } from './errors.mjs';
 
 const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffic|verify you are human|cf-challenge/i;
 
