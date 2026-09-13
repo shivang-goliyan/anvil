@@ -95,6 +95,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
           shape: now.shape,
           markup: formMarkup(live.html),
           rejections,
+          attempt: n,
         });
       } finally {
         stopKeepAlive();

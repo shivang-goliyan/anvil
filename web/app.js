@@ -62,6 +62,8 @@ function stepText(s) {
   if (!s) return '';
   if (s.kind === 'navigate') return `open ${s.url}`;
   if (s.kind === 'fill') return `fill ${s.selector}  ←  ${s.value}`;
+  if (s.kind === 'select') return `select ${s.selector}  ←  ${s.value}`;
+  if (s.kind === 'check') return `check ${s.selector}`;
   if (s.kind === 'click') return `click ${s.selector}`;
   if (s.kind === 'submit') return `submit ${s.selector}`;
   if (s.kind === 'assert') return `expect ${s.selector}`;
@@ -98,6 +100,12 @@ function plainStep(s, inputs) {
     const label = boxLabel(s.selector);
     return `Typed ${what} into ${label ? `the ${quoted(label)} box` : key ? `the ${key} box` : 'a box'}`;
   }
+  if (s.kind === 'select') {
+    const key = String(s.value ?? '').match(/\{\{\s*(\w+)\s*\}\}/)?.[1];
+    const what = key ? (inputs?.[key] !== undefined ? quoted(inputs[key]) : (FIELD_WORDS[key] ?? key)) : quoted(s.value);
+    return `Picked ${what} from a list`;
+  }
+  if (s.kind === 'check') return 'Ticked a box';
   if (s.kind === 'click' || s.kind === 'submit') {
     const m = String(s.selector ?? '').match(/has-text\(\s*["'](.+?)["']\s*\)|text\s*=\s*["']?([^"'\]]+)/);
     const text = m?.[1] ?? m?.[2];

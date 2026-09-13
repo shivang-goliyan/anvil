@@ -21,6 +21,8 @@ const LIMITS = { read: [300, 60_000], write: [12, 60_000], break: [6, 10 * 60_00
 
 const hits = new Map();
 function tooMany(ip, bucket) {
+  // the local bench hammers one demo site from one address on purpose
+  if (process.env.ANVIL_BENCH === '1') return false;
   const [max, windowMs] = LIMITS[bucket];
   const key = `${bucket} ${ip}`;
   const now = Date.now();

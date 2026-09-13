@@ -66,3 +66,10 @@ test('everything out of quota says so', async () => {
   answer = () => quota('Quota exceeded for metric generate_requests_per_day');
   await assert.rejects(askForJson({ system: 's', prompt: 'p', model: 'gemini:flash-all' }), (err) => err.quota === true);
 });
+
+test('rotate starts further along', async () => {
+  answer = () => ok;
+  calls.length = 0;
+  await askForJson({ system: 's', prompt: 'p', model: 'groq:first-r,other/second-r:free', rotate: 1 });
+  assert.equal(calls[0].model, 'other/second-r:free');
+});

@@ -157,10 +157,20 @@ async function connect(log) {
 // A remote browser session. When `forward` is set, requests to `origin` are answered by
 // fetching the same path from a local server, over the CDP connection we already hold.
 // That lets the cloud browser drive a site that is not on the public internet yet.
+// ANVIL_BROWSER=local swaps Anakin's browser for a local Chrome. Only the bench uses it: same code
+// paths, no credits, no network between the browser and the demo site.
+const LOCAL_BROWSER = process.env.ANVIL_BROWSER === 'local';
+
 export async function openBrowser({ origin, forward, log } = {}) {
-  const browser = await connect(log);
-  await recordSpend('browser', 1, 'session opened');
-  log?.('anakin', `browser session opened, 1 credit (${await creditsUsed()}/${hourlyCap()} this hour)`, { call: 'browser', credits: 1 });
+  let browser;
+  if (LOCAL_BROWSER) {
+    browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true });
+    log?.('anakin', 'browser session opened (local bench browser, no credits)', { call: 'browser', credits: 0 });
+  } else {
+    browser = await connect(log);
+    await recordSpend('browser', 1, 'session opened');
+    log?.('anakin', `browser session opened, 1 credit (${await creditsUsed()}/${hourlyCap()} this hour)`, { call: 'browser', credits: 1 });
+  }
   const context = browser.contexts()[0] ?? (await browser.newContext());
   const page = context.pages()[0] ?? (await context.newPage());
   // the remote default window is very large, which leaves screenshots mostly empty
@@ -188,8 +198,14 @@ export async function openBrowser({ origin, forward, log } = {}) {
   }
 
   let lastDocStatus = null;
+  let failedLoad = null;
   page.on('response', (r) => {
     if (r.request().isNavigationRequest() && r.frame() === page.mainFrame()) lastDocStatus = r.status();
+  });
+  // Now and then the browser follows a redirect to the forwarded origin without asking the route, lands
+  // on its own "site can't be reached" page, and a plan looking for generic markup can read that page.
+  page.on('requestfailed', (r) => {
+    if (r.isNavigationRequest() && r.frame() === page.mainFrame()) failedLoad = { url: r.url(), method: r.method() };
   });
 
   // A connection that drops without closing leaves every browser call waiting forever (seen
@@ -203,6 +219,16 @@ export async function openBrowser({ origin, forward, log } = {}) {
     browser,
     page,
     docStatus: () => lastDocStatus,
+    // Loads again a page that failed to load, when that is safe (a plain GET). True if the page is back.
+    async recover() {
+      if (!page.url().startsWith('chrome-error://')) return true;
+      const failed = failedLoad;
+      failedLoad = null;
+      if (!failed || failed.method !== 'GET') return false;
+      log?.('browser', `a page load failed in the browser, loading ${new URL(failed.url).pathname} again`, { url: failed.url });
+      await page.goto(failed.url, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+      return !page.url().startsWith('chrome-error://');
+    },
     within(ms, promise, what) {
       promise.catch?.(() => {});
       if (dead) return Promise.reject(gone(what));
@@ -219,7 +245,7 @@ export async function openBrowser({ origin, forward, log } = {}) {
       await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, dead ? 0 : 10_000))]);
       const ms = Date.now() - started;
       // billed per started 2 minutes, the first one was recorded on connect
-      const extra = Math.ceil(ms / 120_000) - 1;
+      const extra = LOCAL_BROWSER ? 0 : Math.ceil(ms / 120_000) - 1;
       if (extra > 0) {
         await recordSpend('browser', extra, `session ran ${Math.round(ms / 1000)}s`);
         log?.('anakin', `session ran past 2 minutes, ${extra} more credit${extra === 1 ? '' : 's'}`, { call: 'browser', credits: extra });

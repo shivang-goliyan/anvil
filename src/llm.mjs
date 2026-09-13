@@ -55,8 +55,11 @@ const benched = new Map();
 const emptyUntil = new Map();
 const nextUtcMidnight = () => new Date(new Date().setUTCHours(24, 0, 0, 0)).getTime();
 
-export async function askForJson({ system, prompt, model = process.env.LLM_MODEL, timeoutMs = 120_000 }) {
-  const entries = chain(model);
+// rotate starts the chain further along, so a retry gets a different model's take instead of the same mistake
+export async function askForJson({ system, prompt, model = process.env.LLM_MODEL, timeoutMs = 120_000, rotate = 0 }) {
+  const listed = chain(model);
+  const r = listed.length ? rotate % listed.length : 0;
+  const entries = [...listed.slice(r), ...listed.slice(0, r)];
   if (!entries.length) throw new LlmError('LLM_MODEL is not set');
 
   const attempts = entries.flatMap((entry) => keysFor(entry).map((key, i) => ({ entry, key, keyLabel: `${entry.provider} key ${i + 1}` })));

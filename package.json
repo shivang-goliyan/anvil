@@ -16,7 +16,8 @@
     "record-demo": "node --env-file=.env scripts/record-demo.mjs",
     "monitor": "node --env-file=.env scripts/monitor.mjs",
     "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
-    "test": "node --test \"test/*.test.mjs\""
+    "test": "node --test \"test/*.test.mjs\"",
+    "bench": "node --env-file=.env scripts/bench.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "7.10.0",

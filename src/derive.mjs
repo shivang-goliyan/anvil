@@ -5,23 +5,33 @@ const SYSTEM = `You write browser automation plans for a website, as JSON.
 A plan is {"steps": [...]} where each step is one of:
   {"kind":"navigate","url":"<absolute url or path>"}
   {"kind":"fill","selector":"<css>","value":"{{inputKey}}"}
+  {"kind":"select","selector":"<css of a <select>>","value":"{{inputKey}}"}   (picks the option by value or visible text)
+  {"kind":"check","selector":"<css of a checkbox>"}
   {"kind":"click","selector":"<css>"}
-  {"kind":"submit","selector":"<css of the submit control>"}   (clicks and waits for the next page)
+  {"kind":"submit","selector":"<css of the submit control>"}   (clicks and waits for the next page to load)
   {"kind":"assert","selector":"<css that must be visible>"}
   {"kind":"extract","fields":{"<outputField>":{"selector":"<css>","type":"string"|"number"}}}
+Any step may add "frame":"<css of an iframe>" when its element is inside that iframe.
+A click or submit on a page that updates in place (no new page load, typical of JavaScript apps) must add
+"waitFor":"<css of something that appears once it has worked>".
 
 Rules:
 - Use only selectors that exist in the markup you are given. Prefer [name="..."] or #id for form controls.
+  When ids and classes look generated (random letters and digits), prefer stable things: [name], [type],
+  [aria-label], [placeholder], label text via :has(), or visible button text via :has-text("...").
 - A flow can span several pages. Every submit leads to the next page; the step after it must use selectors from that page.
   You are shown the entry page and every other page seen so far (where the old plan and earlier attempts got stuck).
   Use the selectors on those pages. Only for a page you have not been shown, keep the previous plan's selectors.
 - Do not repeat a plan that an earlier attempt already showed to fail.
+- An assert must use a selector that exists only on the page you expect next (an id, a specific attribute or
+  text), never a generic one such as "p strong" or "h1" that an error page could also match. The same goes
+  for extract selectors: anchor them to the element that holds the value.
 - Fill values must be {{inputKey}} placeholders using the input keys provided, never literal data.
 - The extract step must produce exactly the output fields listed, with the listed types, from the final page.
 - If a previous plan is given, keep every step that still matches and change only what the site change broke.
 - Respond with the JSON object only.`;
 
-export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, pages = [], changes, shape, markup, rejections = [] }) {
+export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, pages = [], changes, shape, markup, rejections = [], attempt = 1 }) {
   const prompt = [
     `GOAL\n${goal}`,
     `ENTRY URL\n${entryUrl}`,
@@ -38,7 +48,7 @@ export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, prev
     .filter(Boolean)
     .join('\n\n');
 
-  const { data, model, ms, skipped } = await askForJson({ system: SYSTEM, prompt });
+  const { data, model, ms, skipped } = await askForJson({ system: SYSTEM, prompt, rotate: attempt - 1 });
   return { plan: { steps: data.steps }, model, ms, skipped, promptChars: prompt.length };
 }
 
