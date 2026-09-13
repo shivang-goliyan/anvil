@@ -8,8 +8,15 @@ import { db } from './db.mjs';
 import { loadCapability, sessionOptions, setStatus, promotePlan, booksSomething, ownedSiteBookings } from './capabilities.mjs';
 import { queueRun, Busy } from './jobs.mjs';
 import { shooter } from './shots.mjs';
+import { fitCheck } from './fit.mjs';
 
 const MAX_ATTEMPTS = 3;
+// Nothing has failed for these, so first make sure something needs fixing at all.
+const CHECK_FIRST = new Set(['monitor', 'manual', 'check']);
+// A failed booking with these asks for its booking to be made again once the steps are fixed.
+const FROM_A_RUN = new Set(['run-failure', 'cooldown']);
+// Allowed to start on a capability marked as needing a person: a person asked, or there is new evidence.
+const PAST_BREAKER = new Set(['manual', 'check', 'monitor', 'cooldown']);
 
 // two page shapes hold the same form: same id, action and buttons
 const formKey = (f) => JSON.stringify([f.id, f.action, f.buttons.map((b) => b.text)]);
@@ -40,7 +47,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
     return db.repairAttempt.update({ where: { id: repairId }, data: { outcome, ...data } });
   };
 
-  if (cap.status === 'degraded' && rec.trigger !== 'manual') {
+  if (cap.status === 'degraded' && !PAST_BREAKER.has(rec.trigger)) {
     log('repair', 'capability is degraded, not repairing without a manual trigger', { circuitBreaker: true });
     return finish('skipped', { diagnosis: 'circuit breaker: capability is degraded' });
   }
@@ -53,8 +60,42 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   const previous = cap.plan;
   const statusBefore = cap.status === 'repairing' ? 'healthy' : cap.status;
   await db.repairAttempt.update({ where: { id: repairId }, data: { outcome: 'running', fromPlanId: previous.id } });
+
+  let checked = false;
+  if (CHECK_FIRST.has(rec.trigger) && cap.engine === 'browser') {
+    let fit;
+    try {
+      fit = await fitCheck(cap, log);
+    } catch (err) {
+      if (err instanceof OverBudget) {
+        log('budget', `${err.message}. Not checking the website, leaving plan v${previous.version} in place`, { used: err.used, cap: err.cap });
+        return finish('capped', { diagnosis: err.message });
+      }
+      fit = { fits: false, unsure: true, why: err.message };
+    }
+    if (fit.fits) {
+      // a working plan is the best proof the capability does not need a person any more
+      if (cap.status === 'degraded') await setStatus(cap.id, 'healthy');
+      log('fit', `the saved steps still fit, so there is nothing to fix. No model was asked and nothing was booked${cap.status === 'degraded' ? '. Marked healthy again' : ''}`, { verdict: 'fits', changes: fit.changes, recovered: cap.status === 'degraded' });
+      return finish('not-needed', { diagnosis: `saved steps still fit; ${fit.changes.join('; ')}` });
+    }
+    if (fit.blocked) {
+      await setStatus(cap.id, 'degraded');
+      log('fit', `the website is refusing Anvil (${fit.verdict}). New steps cannot get past that, so no repair`, { verdict: 'blocked', why: fit.why });
+      return finish('skipped', { diagnosis: `blocked: ${fit.why}` });
+    }
+    if (fit.unsure) {
+      log('fit', `could not tell whether the saved steps fit, because ${fit.verdict ?? fit.why}. Changing nothing`, { verdict: 'unsure', why: fit.why });
+      return finish('skipped', { diagnosis: `could not check: ${fit.why}` });
+    }
+    log('fit', `the saved steps no longer fit: ${fit.why}`, { verdict: 'stale', why: fit.why, changes: fit.changes });
+    failure = [failure, `Checking the saved steps without booking showed that ${fit.why}.`].filter(Boolean).join(' ');
+    stuckOn = fit.stuckOn;
+    checked = true;
+  }
+
   await setStatus(cap.id, 'repairing');
-  log('repair', `repair started (${rec.trigger}), setting plan v${previous.version} aside`, { fromPlanId: previous.id, failure: failure ?? null });
+  log('repair', `repair started (${rec.trigger}), setting plan v${previous.version} aside`, { fromPlanId: previous.id, failure: failure ?? null, checked });
   log('health', 'capability marked repairing', { status: 'repairing' });
 
   let changes = [];
@@ -239,7 +280,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   if (ending?.[0] === 'repaired' && write) {
     if (bookedBefore && readExisting) {
       log('reuse', 'the booking was already made before it broke, so it is not booked again: the new steps read it back instead', { records: readExisting });
-    } else if (rec.trigger === 'run-failure') {
+    } else if (FROM_A_RUN.has(rec.trigger)) {
       try {
         const retry = await queueRun(cap.id, inputs, { afterRepair: repairId });
         log('retry', 'now making the one real booking, with the new steps', { runId: retry.id });

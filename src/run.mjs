@@ -15,6 +15,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // a healthy booking takes about 10s; every step inside has its own shorter timeout too
 const PLAN_DEADLINE = 120_000;
 
+// a capability that needed a person gets one fresh repair on a failure this long after its last repair
+const COOLDOWN_MIN = Number(process.env.ANVIL_COOLDOWN_MINUTES ?? 20);
+async function cooledDown(capabilityId) {
+  const last = await db.repairAttempt.findFirst({ where: { capabilityId }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } });
+  return !last || Date.now() - last.createdAt.getTime() >= COOLDOWN_MIN * 60_000;
+}
+
 const stepLabel = (i, s) => `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` : s.url ? ` ${s.url}` : s.fields ? ` ${Object.keys(s.fields).join(', ')}` : ''}`;
 
 async function readAttempt(cap, log) {
@@ -185,11 +192,13 @@ export async function executeRun(runId, log, { afterRepair = null } = {}) {
     } else if (afterRepair) {
       await setStatus(cap.id, 'degraded');
       log('repair', 'this was the one real booking after a repair, and it still did not pass. Not repairing again: marked as needing a person', { afterRepair, status: 'degraded' });
-    } else if (fresh.status === 'degraded') {
-      log('repair', 'capability is degraded, so it will not auto-repair. A manual repair can still be triggered', { circuitBreaker: true });
+    } else if (fresh.status === 'degraded' && !(await cooledDown(cap.id))) {
+      log('repair', `capability is degraded, so it will not auto-repair until ${COOLDOWN_MIN} minutes after its last repair. A manual repair, or a change Anakin Website Monitoring spots, can still start one`, { circuitBreaker: true });
     } else {
+      const trigger = fresh.status === 'degraded' ? 'cooldown' : 'run-failure';
+      if (trigger === 'cooldown') log('repair', `it needed a person, but ${COOLDOWN_MIN} minutes have passed since its last repair, and the website may have changed again since. One fresh repair`, { cooldown: COOLDOWN_MIN });
       try {
-        const repair = await queueRepair(cap.id, { trigger: 'run-failure', failure: out.why, inputs: run.inputs, runId, stuckOn: out.stuckOn });
+        const repair = await queueRepair(cap.id, { trigger, failure: out.why, inputs: run.inputs, runId, stuckOn: out.stuckOn });
         result.repairId = repair.id;
         log('repair', 'structural failure, queued a repair', { repairId: repair.id });
       } catch (err) {

@@ -236,6 +236,10 @@ h1 em::after {
 .breaks .brk.wild:not(:disabled):hover { background: #000; border-color: #000; }
 
 /* change it your way */
+.check-now { margin-top: 12px; padding: 12px; border-radius: 16px; background: var(--line-2); }
+.check-now .btn { width: 100%; justify-content: center; border-color: var(--blue, #2f5bea); color: var(--blue, #2f5bea); }
+.check-now .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.check-now .card-note { font-size: 12.5px; }
 .yours { margin-top: 10px; border: 1.5px solid var(--ink); border-radius: 16px; background: var(--surface); }
 .yours summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; padding: 10px 12px; font-size: 13.5px; font-weight: 700; }
 .yours summary::-webkit-details-marker { display: none; }

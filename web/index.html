@@ -46,7 +46,7 @@
     <div class="sentence" id="sentence"></div>
     <div class="composer-foot">
       <button type="submit" class="btn blue big" id="run-button">Send Anvil to book it <span aria-hidden="true">→</span></button>
-      <button type="button" class="btn outline" id="repair-button" hidden>Ask it to repair now</button>
+      <button type="button" class="btn outline" id="repair-button" hidden>Check and repair it now</button>
     </div>
     <p class="composer-hint" id="composer-hint">A real browser in the cloud opens the library's booking page, fills it in, presses the button, then checks the library's own records. About 20 seconds.</p>
     <p class="notice" id="run-notice" role="status"></p>
@@ -115,6 +115,10 @@
           <button type="submit" class="btn dark">Change the website</button>
         </form>
       </details>
+      <div class="check-now">
+        <button type="button" class="btn outline" id="check-button">Ask Anakin to check the website now</button>
+        <p class="card-note tight">Nothing has to fail first. Anvil fixes itself only if its saved steps no longer fit.</p>
+      </div>
       <p class="notice" id="site-notice" role="status"></p>
       <details class="flow">
         <summary>How its pages fit together right now</summary>
@@ -166,7 +170,7 @@
       <article><b>01</b><h4>Triage first</h4><p>A network blip is retried, a bot block is reported, an empty page is fine. Only a real structural change triggers a repair.</p></article>
       <article><b>02</b><h4>Whole-plan repair</h4><p>The model sees the goal, the old plan, what changed, and every page an attempt got stuck on, then writes every step again.</p></article>
       <article><b>03</b><h4>Rehearse, then check</h4><p>Repairs fill everything in and stop before the button that books, then test the reading steps on a booking that already exists. The first good run teaches a check: what must echo the inputs, and what the site's own records must agree with. Details like a reference format may change and are learned; three failures roll back, honestly.</p></article>
-      <article><b>04</b><h4>Before anything fails</h4><p>Anakin Website Monitoring watches the site. When it changes, a signed webhook starts the repair before anyone's run breaks.</p></article>
+      <article><b>04</b><h4>Only a real change</h4><p>Anakin Website Monitoring watches the site, and anyone can ask it to look now. A signed alert first starts a fit check: the saved selectors on the live page, a rehearsal, the last booking read back. Still fits means nothing to fix and no model call. Wording and colour changes cost nothing.</p></article>
     </div>
     <div class="built">
       <span>Built on Anakin</span>

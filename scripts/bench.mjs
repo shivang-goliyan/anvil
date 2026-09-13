@@ -2,7 +2,11 @@
 // through a local Chrome instead of Anakin's browser. Free, and it measures instead of assuming.
 //
 //   npm run bench -- [cases] [--repeat N] [--json out.json]
-//   cases: comma-separated change kinds (default: every scripted kind, a typed change and 3 surprises)
+//   cases: comma-separated change kinds (default: every scripted kind, a typed change and 3 surprises).
+//   "check:<kind>" makes the change and then asks Anvil to check the website, instead of booking into it.
+//   "cosmetic" always goes through the check, and has to end with nothing to fix and no model asked.
+//   "needs-person:check" and "needs-person:booking" start from a capability marked as needing a person:
+//   a check that finds the steps still fit clears that, and a failed booking after the cooldown repairs once.
 //
 // Needs a model key in .env (it uses the same LLM_MODEL chain as production).
 
@@ -19,7 +23,7 @@ const flag = (name, fallback) => {
 const repeat = Number(flag('--repeat', 1));
 const jsonOut = flag('--json', null);
 const CUSTOM = { kind: 'custom', field: 'email', label: 'Where should we write?', button: 'Grab my room' };
-const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,wrong-room,new-reference-format,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
+const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,wrong-room,new-reference-format,cosmetic,check:rename-field,check:restyle-confirmation,needs-person:check,needs-person:booking,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const dir = mkdtempSync(`${tmpdir()}/anvil-bench-`);
@@ -55,6 +59,10 @@ start('src/api.mjs');
 start('src/worker.mjs');
 
 const api = `http://127.0.0.1:${ports.api}`;
+// the bench reads and marks the capability's status directly, to start a case from "needs a person"
+process.env.DATABASE_URL = env.DATABASE_URL;
+const { db } = await import('../src/db.mjs');
+const status = async () => (await db.capability.findUnique({ where: { id: 'reserve-room' }, select: { status: true } })).status;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function call(method, path, body) {
   const res = await fetch(api + path, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
@@ -94,8 +102,9 @@ async function waitRepair(id) {
       const models = json.trace.filter((e) => e.kind === 'derive' && e.detail?.model).map((e) => e.detail.model);
       const retryRun = json.trace.find((e) => e.kind === 'retry' && e.detail?.runId && e.label.startsWith('now making'))?.detail.runId;
       const during = json.trace.find((e) => e.kind === 'ledger')?.detail.during ?? null;
-      const why = json.trace.filter((e) => ['reject', 'execute', 'rehearse', 'validate', 'error'].includes(e.kind)).map((e) => `    ${e.kind}: ${e.label.slice(0, 400)}`);
-      return { why, outcome: json.repair.outcome, tries, seconds: Math.round((Date.now() - t) / 1000), models, diagnosis: json.repair.diagnosis, retryRun, during };
+      const why = json.trace.filter((e) => ['reject', 'execute', 'rehearse', 'validate', 'error', 'fit'].includes(e.kind)).map((e) => `    ${e.kind}: ${e.label.slice(0, 400)}`);
+      const fit = json.trace.find((e) => e.kind === 'fit' && e.detail?.verdict)?.detail.verdict ?? null;
+      return { why, outcome: json.repair.outcome, tries, seconds: Math.round((Date.now() - t) / 1000), models, diagnosis: json.repair.diagnosis, retryRun, during, fit };
     }
     await sleep(1000);
   }
@@ -108,8 +117,63 @@ for (const kind of cases) {
   results.push(row);
   await call('POST', '/api/target/reset', {});
   row.first = (await book()).status;
-  const b = await call('POST', '/api/target/break', kind === 'custom' ? CUSTOM : { kind });
+  if (kind.startsWith('needs-person:')) {
+    // as if its last repair had given up: the cooldown is measured from the last repair, and here there is none
+    await db.capability.update({ where: { id: 'reserve-room' }, data: { status: 'degraded' } });
+    const how = kind.split(':')[1];
+    const b = await call('POST', '/api/target/break', { kind: how === 'check' ? 'cosmetic' : 'rename-field' });
+    row.note = String(b.json.detail ?? b.json.error ?? '').slice(0, 60);
+    const before = await bookings();
+    let r = null;
+    if (how === 'check') {
+      const c = await call('POST', '/api/check', {});
+      row.broken = c.status === 202 ? 'checked' : `refused ${c.status}`;
+      if (c.json.repairId) r = await waitRepair(c.json.repairId);
+    } else {
+      const broken = await book();
+      row.broken = broken.failureKind ? `${broken.status}/${broken.failureKind}` : broken.status;
+      if (broken.repairId) {
+        r = await waitRepair(broken.repairId);
+        row.trigger = (await call('GET', `/api/repairs/${broken.repairId}`)).json.repair.trigger;
+        if (r.retryRun) row.retry = (await waitRun(r.retryRun)).status;
+      }
+    }
+    if (r) Object.assign(row, { why: r.why, repair: r.outcome, tries: r.tries, seconds: r.seconds, models: r.models, fit: r.fit });
+    row.during = (await bookings()) - before - (row.retry === 'succeeded' ? 1 : 0);
+    row.status = await status();
+    row.after = (await book()).status;
+    let ok = row.first === 'succeeded' && row.status === 'healthy' && row.during === 0 && row.after === 'succeeded';
+    if (how === 'check') ok &&= row.repair === 'not-needed' && row.models?.length === 0;
+    else ok &&= row.trigger === 'cooldown' && row.repair === 'repaired' && row.retry === 'succeeded';
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(26)} first ${row.first.padEnd(9)} ${String(row.broken).padEnd(17)} ${row.trigger ? `trigger ${row.trigger} ` : ''}repair ${String(row.repair).padEnd(10)} models asked ${row.models?.length ?? '-'} ${String(row.seconds).padStart(3)}s  status now ${row.status}  booked-while-repairing ${row.during}  retry ${row.retry}  after ${row.after}  ${row.note}`);
+    row.pass = ok;
+    if (!ok && row.why?.length) console.log(row.why.join('\n'));
+    continue;
+  }
+  const change = kind.replace(/^check:/, '');
+  const b = await call('POST', '/api/target/break', change === 'custom' ? CUSTOM : { kind: change });
   row.note = String(b.json.detail ?? b.json.error ?? '').slice(0, 90);
+  if (kind === 'cosmetic' || kind.startsWith('check:')) {
+    // nothing has failed: somebody asks Anvil to check the website, and only a real change may cost a model call
+    const before = await bookings();
+    const c = await call('POST', '/api/check', {});
+    row.broken = c.status === 202 ? 'checked' : `refused ${c.status}`;
+    if (c.json.repairId) {
+      const r = await waitRepair(c.json.repairId);
+      Object.assign(row, { why: r.why, repair: r.outcome, tries: r.tries, seconds: r.seconds, models: r.models, fit: r.fit, retry: r.retryRun ? 'queued' : '-' });
+      row.during = (await bookings()) - before;
+      if (r.outcome !== 'repaired' && r.outcome !== 'not-needed') row.note = String(r.diagnosis ?? '').slice(0, 120);
+    }
+    row.after = (await book()).status;
+    row.bookings = await bookings();
+    let ok = row.first === 'succeeded' && row.during === 0 && row.retry === '-' && row.after === 'succeeded';
+    if (kind === 'cosmetic') ok &&= row.repair === 'not-needed' && row.fit === 'fits' && row.models.length === 0 && row.tries === 0;
+    else ok &&= row.repair === 'repaired' && row.fit === 'stale';
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(26)} first ${row.first.padEnd(9)} ${String(row.broken).padEnd(8)} fit ${String(row.fit).padEnd(6)} repair ${String(row.repair).padEnd(10)} models asked ${row.models?.length ?? '-'} tries ${row.tries} ${String(row.seconds).padStart(3)}s  booked-while-checking ${row.during}  after ${row.after}  ${row.note}`);
+    row.pass = ok;
+    if (!ok && row.why?.length) console.log(row.why.join('\n'));
+    continue;
+  }
   const broken = await book();
   row.broken = broken.failureKind ? `${broken.status}/${broken.failureKind}` : broken.status;
   if (broken.repairId) {
@@ -138,9 +202,11 @@ for (const kind of cases) {
 }
 
 const passed = results.filter((r) => r.pass).length;
-const repairs = results.filter((r) => r.repair !== '-');
+const repairs = results.filter((r) => !['-', 'not-needed'].includes(r.repair));
+const fine = results.filter((r) => r.repair === 'not-needed').length;
 const secs = repairs.map((r) => r.seconds).sort((a, b) => a - b);
-console.log(`\n${passed}/${results.length} passed · ${repairs.filter((r) => r.repair === 'repaired').length}/${repairs.length} repairs promoted · median repair ${secs[Math.floor(secs.length / 2)] ?? '-'}s · ${Math.round((Date.now() - t0) / 1000)}s total`);
+console.log(`\n${passed}/${results.length} passed · ${repairs.filter((r) => r.repair === 'repaired').length}/${repairs.length} repairs promoted · median repair ${secs[Math.floor(secs.length / 2)] ?? '-'}s · ${fine} checks found nothing to fix · ${Math.round((Date.now() - t0) / 1000)}s total`);
 if (jsonOut) writeFileSync(jsonOut, JSON.stringify({ at: new Date().toISOString(), model: process.env.LLM_MODEL ?? null, results }, null, 1));
 stopAll();
+await db.$disconnect();
 process.exit(passed === results.length ? 0 : 1);

@@ -325,6 +325,7 @@ function viewer(where = "Harbor Lane Library, as Anvil's cloud browser saw it") 
 }
 
 function shotCaption(d, presses, words) {
+  if (d.fit) return d.stuck ? ['Where the saved steps stopped fitting', 'bad'] : ['Filled in by the saved steps. The booking button was not pressed', 'good'];
   if (d.stuck) return ['Where it got stuck', 'bad'];
   if (d.after) return [words || 'After that step', ''];
   if (d.kind === 'extract') return ['The page Anvil read the result from', 'good'];
@@ -346,7 +347,7 @@ const humanize = (s) =>
 
 // booked: this visitor has had a booking finish. changed: the site differs from what Anvil's steps
 // were last proven on. mine: this visitor made that change (the demo is shared, others may have).
-const story = { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, others: 0 };
+const story = { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false, others: 0 };
 
 function afterRun(ok, structural) {
   const hadBooked = story.booked;
@@ -367,6 +368,8 @@ function renderStory() {
   const b = (t) => `<b>${t}</b>`;
   let hint;
   if (!story.changed) hint = story.booked ? `Booked. Now change the website with the buttons under ${b('The website Anvil works on')} (on the right, or further down on a phone), then book again.` : `Start at the top: press ${b('Send Anvil to book it')}. On its first good booking Anvil also learns what a correct booking looks like.`;
+  else if (story.fits && !story.fixed && !story.again) hint = `Anvil checked the website and its saved steps still fit, so it fixed nothing and asked no AI model. Book again to see them work, or make a change that matters.`;
+  else if (story.cosmetic && !story.broke && !story.fixed && !story.again) hint = `Only the wording and colours changed. Book again, or press ${b('Ask Anakin to check the website now')}: Anvil should find nothing to fix.`;
   else if (story.degraded) hint = `This time Anvil could not fix itself in three tries, so it kept its old steps and says so instead of pretending. Press ${b('Put everything back')} to start over.`;
   else if (story.paused && !story.fixed) hint = `The live repair had to pause (the demo's free AI models or its credit budget ran out for now). The recording below shows the whole loop, start to finish. Try again later, or press ${b('Put everything back')}.`;
   else if (story.again && !story.fixed) hint = `That change did not touch anything Anvil's steps rely on, so there was nothing to fix. Try another change, or ${b('Surprise me')}.`;
@@ -583,6 +586,8 @@ function repairView(card) {
   let presses = 0;
   let skipped = 0;
   let retryRun = null;
+  // true while Anvil is only checking whether the saved steps still fit, before any repair
+  let checking = false;
   const add = (opts) => {
     endLive(view);
     return stepItem(view.stepper, opts);
@@ -610,12 +615,61 @@ function repairView(card) {
     event(e) {
       const d = e.detail ?? {};
       if (e.kind === 'queued') {
-        card.sub.textContent = d.trigger === 'monitor' ? 'started by Anakin Website Monitoring, before any booking failed' : d.trigger === 'manual' ? 'started by hand' : 'started because the booking did not work';
+        const how = {
+          monitor: d.asked ? 'started by Anakin Website Monitoring, which someone asked to check the website just now' : 'started by Anakin Website Monitoring, before any booking failed',
+          manual: 'started by hand',
+          check: 'someone asked Anvil to check the website, nothing had failed',
+          cooldown: 'a booking failed, and the cooldown since the last repair had passed',
+        };
+        card.sub.textContent = how[d.trigger] ?? 'started because the booking did not work';
+        if (['monitor', 'manual', 'check'].includes(d.trigger)) card.heading.textContent = 'Anvil checks whether it needs fixing';
+      } else if (e.kind === 'fit' && d.stage === 'start') {
+        checking = true;
+        setChip(card, 'checking', 'run', true);
+        candidate = fromSteps ?? [];
+        shots = viewer();
+        presses = 0;
+        running = add({ icon: '?', title: 'First, it checked whether its saved steps still fit', text: 'Before asking any AI model for new steps. Nothing gets booked.', extra: shots.node });
+        liveRow(view, 'Trying the saved steps on the live website', 'Anakin Browser API');
+      } else if (e.kind === 'diff' && checking) {
+        if (!changes) {
+          changes = h('ul', { class: 'changes' });
+          add({ icon: 'Δ', tone: 'warm', title: 'What is different on the first page', text: 'Compared with the page the saved steps were last proven on.', extra: changes });
+          liveRow(view, 'Looking for what the saved steps need on the page', 'Anakin Browser API');
+        }
+        changes.append(h('li', { text: /no structural change/.test(e.label) ? 'Its form, boxes and buttons are built the same way as before.' : cap1(e.label) }));
+      } else if (e.kind === 'fit' && d.stage === 'selectors') {
+        const gone = d.gone ?? [];
+        add({
+          icon: gone.length ? '✕' : '⌖',
+          tone: gone.length ? 'bad' : 'good',
+          title: gone.length ? `${gone.length} of the ${d.total} things its steps look for on the first page are gone` : `All ${d.total} things its steps look for on the first page are still there`,
+          extra: gone.length ? h('ul', { class: 'checks' }, gone.map((sel) => h('li', { class: 'miss', text: sel }))) : null,
+        });
+        if (!gone.length) liveRow(view, 'Rehearsing the saved steps, stopping before the button that books', 'Anakin Browser API');
+      } else if (e.kind === 'fit' && d.stage === 'after') {
+        add({ icon: '·', title: 'The steps after booking were not checked this time', text: `${cap1(e.label.replace(/, so the steps after the booking button are not checked this time/, ''))}.` });
+      } else if (e.kind === 'fit' && d.stage === 'limit') {
+        add({ icon: 'i', title: 'One thing only a real booking can show', text: 'What the booking button leads to, say a new “check your details” page, is only seen by pressing it. If that changed, the next booking finds out without booking anything wrong, and Anvil fixes itself then.' });
+      } else if (e.kind === 'fit' && d.verdict === 'fits') {
+        checking = false;
+        outcome('', 'Nothing to fix', `Whatever changed on the website, the saved steps still do the whole job, so Anvil keeps them. No AI model was asked and nothing was booked.${d.recovered ? ' It had been marked as needing a person, and is marked healthy again.' : ''}`);
+      } else if (e.kind === 'fit' && d.verdict === 'stale') {
+        checking = false;
+        running = null;
+        shots = null;
+        card.heading.textContent = 'Anvil fixes itself';
+        add({ icon: '✕', tone: 'bad', title: 'The saved steps no longer fit, so now it fixes itself', text: `${cap1(humanize(d.why))}.` });
+      } else if (e.kind === 'fit' && ['blocked', 'unsure'].includes(d.verdict)) {
+        checking = false;
+        outcome(d.verdict === 'blocked' ? 'bad' : 'warm', d.verdict === 'blocked' ? 'Blocked' : 'Could not check', `${cap1(humanize(e.label))}.`);
+      } else if (e.kind === 'step' && checking && running) {
+        running.querySelector('p').textContent = short(plainStep(d.step), 110);
       } else if (e.kind === 'repair' && d.fromPlanId !== undefined) {
         setChip(card, 'fixing', 'warm', true);
         const v = e.label.match(/plan v(\d+)/)?.[1];
         const stuck = String(d.failure ?? '').match(/step (\d+) \(/);
-        const why = !d.failure ? null : stuck ? `Why: step ${stuck[1]} of them no longer matched the website, so the booking could not go through.` : `Why: ${humanize(d.failure)}`;
+        const why = d.checked ? 'Why: the check above showed they no longer fit the website.' : !d.failure ? null : stuck ? `Why: step ${stuck[1]} of them no longer matched the website, so the booking could not go through.` : `Why: ${humanize(d.failure)}`;
         add({ icon: '⌫', title: `Put the saved steps${v ? ` (version ${v})` : ''} aside`, text: why });
       } else if (e.kind === 'repair' && /backing off/.test(e.label)) {
         endLive(view);
@@ -668,10 +722,11 @@ function repairView(card) {
       } else if (e.kind === 'rehearse') {
         if (running) running.querySelector('p').textContent = 'filled everything in, then stopped before the button that books';
         const miss = d.sent?.missing ?? [];
+        if (d.fit && !miss.length) liveRow(view, 'Reading the last good booking with the saved steps', 'Anakin Browser API');
         add({
           icon: miss.length ? '✕' : '◌',
           tone: miss.length ? 'bad' : 'good',
-          title: miss.length ? 'The rehearsal came up short' : 'Rehearsed the booking without booking',
+          title: miss.length ? 'The rehearsal came up short' : d.fit ? 'Rehearsed the saved steps without booking' : 'Rehearsed the booking without booking',
           text: miss.length ? `Right before the booking button, the page did not hold ${listWords(miss.map(fieldWords))}.` : 'Right before the button that books, it read the page back: every detail was there. Nothing was sent.',
           extra: h('ul', { class: 'checks' }, [...(d.sent?.found ?? []).map((k) => h('li', {}, h('b', { text: k }), 'on the page ✓')), ...miss.map((k) => h('li', { class: 'miss', text: `${k} not on the page` }))]),
         });
@@ -682,8 +737,8 @@ function repairView(card) {
         add({
           icon: bad ? '✕' : '✓',
           tone: bad ? 'bad' : 'good',
-          title: bad ? 'The new reading steps did not pass the check' : 'Checked the steps after booking, on a booking that already exists',
-          text: bad ? null : `Instead of booking again, it opened ${d.existing} and ran the new steps from there: the confirmation page and the library's own records say the same thing.`,
+          title: bad ? `The ${d.fit ? 'saved' : 'new'} reading steps did not pass the check` : 'Checked the steps after booking, on a booking that already exists',
+          text: bad ? null : `Instead of booking again, it opened ${d.existing} and ran the ${d.fit ? 'saved' : 'new'} steps from there: the confirmation page and the library's own records say the same thing.`,
           extra: bad ? h('ul', { class: 'checks' }, d.problems.map((p) => h('li', { class: 'miss', text: p }))) : h('ul', { class: 'checks' }, Object.entries(rec).filter(([k]) => !stored(k)).map(([k, v]) => h('li', {}, h('b', { text: k }), `${v}${rec[`stored_${k}`] !== undefined ? ' · on record ✓' : ' ✓'}`))),
         });
       } else if (e.kind === 'ledger') {
@@ -719,7 +774,7 @@ function repairView(card) {
       endLive(view);
       stopClock(card);
       const r = json.repair;
-      const tones = { repaired: ['fixed', 'good'], degraded: ['not fixed', 'bad'], capped: ['stopped · budget', 'warm'], skipped: ['skipped', 'warm'], failed: ['failed', 'bad'] };
+      const tones = { repaired: ['fixed', 'good'], 'not-needed': ['nothing to fix', 'good'], degraded: ['not fixed', 'bad'], capped: ['stopped · budget', 'warm'], skipped: ['skipped', 'warm'], failed: ['failed', 'bad'] };
       const [text, tone] = tones[r.outcome] ?? [r.outcome, ''];
       setChip(card, text, tone);
       if (r.outcome === 'skipped' && !card.body.querySelector('.outcome')) outcome('warm', 'Skipped', r.diagnosis ?? '');
@@ -731,8 +786,10 @@ function repairView(card) {
           toast(`Fixed · saved as version ${json.toPlan?.version ?? json.capability?.plan?.version ?? ''}`.trim(), 'good', card.node, retryRun ? 'Rehearsed and checked without booking. Now it makes the one real booking.' : 'Anvil wrote new steps and checked them. Book again to see them work.');
         }
         if (r.outcome === 'degraded') toast('Not fixed this time', 'bad', card.node, 'Three tries did not pass the check, so Anvil kept its old steps and says so.');
+        if (r.outcome === 'not-needed') toast('Nothing to fix', 'good', card.node, 'The saved steps still fit the website. No AI model was asked, nothing was booked.');
         if (!others) {
           if (r.outcome === 'repaired') story.fixed = true;
+          if (r.outcome === 'not-needed') story.fits = true;
           if (r.outcome === 'degraded') story.degraded = true;
           if (r.outcome === 'capped') {
             story.paused = true;
@@ -1074,12 +1131,54 @@ $('repair-button').addEventListener('click', async () => {
   else notice('run-notice', json.error, true);
 });
 
+// "Ask Anakin to check the website now": nothing has to fail first
+let checkPending = false;
+$('check-button').addEventListener('click', async () => {
+  checkPending = true;
+  $('check-button').disabled = true;
+  notice('site-notice', 'Asking for a check…');
+  const { status, json } = await api('POST', '/api/check', {});
+  if (status === 202 && json.via === 'direct') {
+    notice('site-notice', '');
+    marker('You asked Anvil to check the website now', 'Nothing has failed. Anvil first checks whether its saved steps still fit, and fixes itself only if they do not.', true);
+    follow('repair', json.repairId);
+  } else if (status === 202) {
+    marker('You asked Anakin Website Monitoring to check the website now', 'Nothing has failed. If Anakin sees the page differ from its last look, its signed alert makes Anvil check whether its saved steps still fit.', true);
+    notice('site-notice', 'Anakin Website Monitoring is looking at the page. That usually takes a few seconds.');
+    await waitForCheck(json.check.at);
+  } else if (status === 409 && json.repairId) {
+    notice('site-notice', 'Anvil is already checking or fixing itself, so you are watching that.');
+    follow('repair', json.repairId, { others: true });
+  } else {
+    notice('site-notice', json.error ?? `that did not work (${status})`, true);
+  }
+  checkPending = false;
+  loadTarget();
+});
+
+async function waitForCheck(at) {
+  for (let i = 0; i < 60; i++) {
+    await sleep(3000);
+    const { status, json } = await api('GET', '/api/check');
+    const c = json.check;
+    if (status !== 200 || !c || c.at !== at) return;
+    if (c.repairId) {
+      notice('site-notice', '');
+      return follow('repair', c.repairId);
+    }
+    if (c.landed && !c.landed.changed) return notice('site-notice', 'Anakin looked, and the page is exactly as it was on its last look, so there was nothing for Anvil to check.');
+    if (c.landed?.changed) notice('site-notice', 'Anakin saw the page differ. Its alert is on the way.');
+  }
+  notice('site-notice', 'Anakin has not reported back yet. If it sees a change, the check shows up in the list on its own.');
+}
+
 // ------------------------------------------------------------------ the demo site card
 
 const ORIGINAL_NAMES = { name: 'full_name', email: 'email', seats: 'seats', room: 'room', date: 'date', time: 'time' };
-const BREAK_ICONS = { 'rename-field': 'Aa', 'add-step': '+', 'reorder-steps': '⇅', 'restyle-confirmation': '▤', 'wrong-room': '≠', 'new-reference-format': '#', surprise: '✦' };
+const BREAK_ICONS = { cosmetic: '◐', 'rename-field': 'Aa', 'add-step': '+', 'reorder-steps': '⇅', 'restyle-confirmation': '▤', 'wrong-room': '≠', 'new-reference-format': '#', surprise: '✦' };
 const BREAK_SHORT = {
   custom: 'Your own change',
+  cosmetic: 'Only change the wording and colours',
   'rename-field': 'Rename the Email box',
   'add-step': 'Add a “check your details” page',
   'reorder-steps': 'Ask for seats on a page of its own',
@@ -1107,7 +1206,7 @@ function renderBrowser(t) {
   } else {
     const formChanged = s.formId && s.formId !== 'reserve-form';
     const shuffled = s.fields.map((f) => f.key).join() !== Object.keys(ORIGINAL_NAMES).join();
-    pages.push(page('Form', [formChanged ? h('code', { class: 'ref', text: `#${s.formId}` }) : null, s.fields.map(miniField), h('span', { class: 'go', text: s.submitLabel })], { changed: formChanged || shuffled, flag: formChanged ? 'changed' : shuffled ? 'shuffled' : null }));
+    pages.push(page('Form', [formChanged ? h('code', { class: 'ref', text: `#${s.formId}` }) : null, s.fields.map(miniField), h('span', { class: 'go', text: s.submitLabel })], { changed: formChanged || shuffled || s.cosmetic, flag: formChanged ? 'changed' : shuffled ? 'shuffled' : s.cosmetic ? 'reworded' : null }));
   }
   if (s.reviewStep) pages.push(page('Review', [h('div', { class: 'rows' }, h('i'), h('i'), h('i')), h('span', { class: 'go', text: 'Confirm' })], { changed: true, flag: 'new step' }));
   const refId = s.confirm?.reference ?? 'reference';
@@ -1154,7 +1253,7 @@ async function loadTarget({ mine = false } = {}) {
   $('monitor').hidden = !json.monitor;
   if (json.monitor) {
     const hours = json.monitor.everyMinutes / 60;
-    $('monitor').replaceChildren('Anakin Website Monitoring also watches ', h('a', { href: json.monitor.page, target: '_blank', rel: 'noopener', text: 'this page' }), ` every ${hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : `${json.monitor.everyMinutes} minutes`}. When it spots a change, Anvil starts fixing itself on its own, before any booking fails, and it shows up in the list.`);
+    $('monitor').replaceChildren('Anakin Website Monitoring also watches ', h('a', { href: json.monitor.page, target: '_blank', rel: 'noopener', text: 'this page' }), ` every ${hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : `${json.monitor.everyMinutes} minutes`}, and the button above asks it to look right now. When it reports a change, Anvil first checks whether its saved steps still fit, and only fixes itself if they do not. It shows up in the list either way.`);
   }
   if (firstTarget) {
     firstTarget = false;
@@ -1169,16 +1268,17 @@ async function loadTarget({ mine = false } = {}) {
       const kind = json.breaks.at(-1).kind;
       marker(`Another visitor changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '').replace(/^your own change$/, 'a change they typed in')}`, 'It is a shared demo, so you see their change too. Nobody has told Anvil.');
       story.others++;
-      if (story.booked) Object.assign(story, { changed: true, broke: false, fixed: false, again: false, degraded: false, paused: false });
+      if (story.booked) Object.assign(story, { changed: true, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false });
     } else {
       marker('Another visitor put everything back', 'The website is as built again, and Anvil is back to its first hand-written steps.', true);
-      Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, others: 0 });
+      Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false, others: 0 });
     }
     renderStory();
   }
   knownBreaks = json.breaks.length;
   const applied = new Set(json.breaks.map((b) => b.kind));
   const busy = !!json.busy;
+  $('check-button').disabled = busy || checkPending;
   $('breaks').replaceChildren(
     ...Object.keys(json.kinds)
       .filter((kind) => kind !== 'custom')
@@ -1238,10 +1338,10 @@ async function breakSite(kind, custom) {
     if (kind) {
       toast('Website changed', 'warm', null, 'Anvil has not been told. Book again and watch what happens.');
       marker(kind === 'custom' ? 'You changed the website your way' : `You changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '')}`, `${cap1(json.detail)}. Nobody has told Anvil. Book again to see what it does.`);
-      Object.assign(story, { changed: true, mine: true, broke: false, fixed: false, again: false, degraded: false, paused: false });
+      Object.assign(story, { changed: true, mine: true, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: kind === 'cosmetic' });
     } else {
       marker('Everything is back to the start', 'The website is as built, and Anvil is back to its hand-written first steps with nothing learned yet.', true);
-      Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, others: 0 });
+      Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false, others: 0 });
     }
     renderStory();
   } else {
@@ -1342,9 +1442,9 @@ async function watchActivity() {
   seenSince = json.now;
   for (const r of json.runs ?? []) if (!following.has(`run:${r.id}`)) follow('run', r.id, { others: true, scroll: false });
   for (const r of json.repairs) {
-    if (following.has(`repair:${r.id}`) || r.trigger === 'run-failure') continue;
+    if (following.has(`repair:${r.id}`) || ['run-failure', 'cooldown'].includes(r.trigger)) continue;
     if (r.trigger === 'monitor') {
-      marker('Anakin Website Monitoring noticed the website changed', 'Nobody pressed anything and no booking has failed yet. Anvil is fixing itself ahead of time.', true);
+      marker('Anakin Website Monitoring reported the website changed', 'No booking has failed. Before fixing anything, Anvil checks whether its saved steps still fit.', true);
       follow('repair', r.id);
     } else {
       follow('repair', r.id, { others: true, scroll: false });

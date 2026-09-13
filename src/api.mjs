@@ -10,6 +10,7 @@ import { onAllowlist, allowedSites } from './conduct.mjs';
 import { creditsUsed, hourlyCap } from './budget.mjs';
 import { reserveRoom } from '../capabilities/reserve-room.mjs';
 import { SHOTS, SHOT_NAME, beforeAndAfter } from './shots.mjs';
+import { askForCheck, checkLanded } from './monitor.mjs';
 
 const PORT = Number(process.env.PORT ?? 3310);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -17,7 +18,11 @@ const TARGET_ADMIN = process.env.TARGET_ADMIN_URL || process.env.TARGET_FORWARD 
 const WEB = new URL('../web/', import.meta.url);
 const DEMO = new URL('../demo/recorded.json', import.meta.url);
 // [requests, window] per IP. Breaking the demo site is the one people will want to spam.
-const LIMITS = { read: [300, 60_000], write: [12, 60_000], break: [6, 10 * 60_000] };
+const LIMITS = { read: [300, 60_000], write: [12, 60_000], break: [6, 10 * 60_000], check: [3, 10 * 60_000] };
+// a check costs credits whoever asks, so there is one at a time for everyone
+const CHECK_GAP_MS = 3 * 60_000;
+let lastCheck = null;
+const shownCheck = () => lastCheck && (({ polled, before, ...rest }) => rest)(lastCheck);
 
 const hits = new Map();
 function tooMany(ip, bucket) {
@@ -213,7 +218,7 @@ const routes = [
     /^\/api\/target$/,
     async (req, res) => {
       const c = await targetAdmin('/_admin/config');
-      const site = { org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm, wrongRoom: c.wrongRoom, referenceStyle: c.referenceStyle };
+      const site = { cosmetic: !!c.banner, org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm, wrongRoom: c.wrongRoom, referenceStyle: c.referenceStyle };
       return send(res, 200, { ...c.described, site, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
     },
   ],
@@ -243,12 +248,60 @@ const routes = [
       if (delivery) deliveries.add(delivery);
       try {
         const summary = alert.summary ? `: ${alert.summary}` : '';
-        const repair = await queueRepair(reserveRoom().id, { trigger: 'monitor', failure: `Anakin Website Monitoring saw the page change${summary}. No run has failed yet.` });
+        const asked = lastCheck?.via === 'anakin' && Date.now() - lastCheck.at < 10 * 60_000;
+        const repair = await queueRepair(reserveRoom().id, { trigger: 'monitor', asked, failure: `Anakin Website Monitoring saw the page change${summary}. No run has failed yet.` });
+        if (asked) lastCheck.repairId = repair.id;
         return send(res, 202, { repairId: repair.id });
       } catch (err) {
         if (err instanceof Busy) return send(res, 200, { ...err.existing, note: 'a repair was already on its way' });
         throw err;
       }
+    },
+  ],
+  [
+    // "Check the website now": through Anakin Website Monitoring when this deployment has a monitor, whose
+    // alert then starts the check, or straight to the check when it has none (a local copy, the bench).
+    'POST',
+    /^\/api\/check$/,
+    async (req, res, m, url, ip) => {
+      const cap = await db.capability.findUnique({ where: { id: reserveRoom().id } });
+      if (!cap?.contractId) return send(res, 409, { error: 'book a room first, so Anvil has a good booking to check the website against' });
+      const wait = lastCheck && process.env.ANVIL_BENCH !== '1' ? CHECK_GAP_MS - (Date.now() - lastCheck.at) : 0;
+      if (wait > 0) return send(res, 429, { error: `someone asked for a check ${Math.round((Date.now() - lastCheck.at) / 1000)}s ago. One check every 3 minutes, so try again in ${Math.ceil(wait / 1000)}s`, check: shownCheck() }, { 'retry-after': String(Math.ceil(wait / 1000)) });
+      if (tooMany(ip, 'check')) return send(res, 429, { error: 'you have asked for a lot of checks lately, give it ten minutes' }, { 'retry-after': '600' });
+      const busy = await busyTierB();
+      if (busy) return send(res, 409, { error: 'Anvil is busy on the website right now, check again when that finishes', ...busy });
+      const b = await budget();
+      if (b.used + 3 > b.cap) return cappedReply(res, b);
+      if (process.env.ANAKIN_MONITOR_ID) {
+        const before = await askForCheck();
+        lastCheck = { via: 'anakin', at: Date.now(), before, repairId: null, landed: null };
+        return send(res, 202, { via: 'anakin', check: shownCheck() });
+      }
+      try {
+        const repair = await queueRepair(cap.id, { trigger: 'check', failure: 'Someone asked Anvil to check the website now. No run has failed.' });
+        lastCheck = { via: 'direct', at: Date.now(), repairId: repair.id };
+        return send(res, 202, { via: 'direct', repairId: repair.id, check: shownCheck() });
+      } catch (err) {
+        if (err instanceof Busy) return send(res, 409, { error: err.message, ...err.existing });
+        throw err;
+      }
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/check$/,
+    async (req, res) => {
+      if (!lastCheck) return send(res, 200, { check: null });
+      if (lastCheck.via === 'anakin' && !lastCheck.landed && !lastCheck.repairId && Date.now() - lastCheck.at < 10 * 60_000) {
+        // the page polls this every few seconds; Anakin is asked at most every 5
+        if (!lastCheck.polled || Date.now() - lastCheck.polled > 5000) {
+          lastCheck.polled = Date.now();
+          const seen = await checkLanded(lastCheck.before).catch(() => null);
+          if (seen?.landed) lastCheck.landed = { at: Date.now(), changed: seen.changed };
+        }
+      }
+      return send(res, 200, { check: shownCheck() });
     },
   ],
   [
@@ -386,7 +439,7 @@ const routes = [
       if (!cap.contractId) return send(res, 409, { error: 'this capability has never had a good run, so there is no contract to repair against yet' });
       if (cap.engine !== 'browser') return send(res, 409, { error: 'repair is only wired up for browser capabilities so far' });
       try {
-        const repair = await queueRepair(cap.id, { trigger: 'manual' });
+        const repair = await queueRepair(cap.id, { trigger: 'manual', failure: 'Someone asked Anvil to repair itself. No run has failed.' });
         return send(res, 202, { id: repair.id, outcome: repair.outcome, poll: `/api/repairs/${repair.id}` });
       } catch (err) {
         if (err instanceof Busy) return send(res, 409, { error: err.message, ...err.existing });

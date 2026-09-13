@@ -32,3 +32,16 @@ test('custom refuses markup and no-ops', () => {
   assert.throws(() => applyBreak(freshConfig(), 'custom', null, { order: 'name,name,email' }), /every box once/);
   assert.throws(() => applyBreak(freshConfig(), 'custom', null, { label: 'Hello' }), /which box/);
 });
+
+test('cosmetic keeps what bookings use', () => {
+  const c = freshConfig();
+  const before = { names: c.fields.map((f) => f.name), form: c.formId, button: c.submitLabel, confirm: c.confirm };
+  const out = applyBreak(c, 'cosmetic');
+  assert.equal(out.changed, true);
+  assert.deepEqual(c.fields.map((f) => f.name), before.names);
+  assert.equal(c.formId, before.form);
+  assert.equal(c.submitLabel, before.button);
+  assert.deepEqual(c.confirm, before.confirm);
+  assert.notEqual(c.fields[0].label, 'Full name');
+  assert.equal(applyBreak(c, 'cosmetic').changed, false);
+});

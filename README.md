@@ -54,14 +54,15 @@ Every failed run is classified before anything is repaired. Repairing on every f
 
 ### The repair loop
 
-`src/repair.mjs`, triggered by a structural failure, a monitor webhook, or a person.
+`src/repair.mjs`, triggered by a structural failure, a monitor webhook, the page's "check the website now" button, or a person.
 
+0. **Only on a real change.** When nothing has failed (a monitor alert, the button, a person), a fit check runs first (`src/fit.mjs`), with no model and no booking: every saved selector the first page needs is looked for on the live page, the saved steps are rehearsed up to the booking button, and the steps after it are run on the last good booking and checked against the contract. If the saved steps still fit, the repair ends as `not-needed`, the page it was checked on becomes the new snapshot, and a capability that was `degraded` is `healthy` again. If they do not fit, the page they stopped on goes to the model with the rest. A block ends it as blocked, and a check that could not tell (the page did not load) changes nothing.
 1. Mark the capability `repairing`.
 2. Re-read the live entry page and diff its structure against the snapshot the old plan was derived from ("field `email` is gone; an email field `contact_email` sits in the same position, likely a rename").
 3. Ask the model for a new plan from the goal, the old plan, how it failed, the diff, the live page and every page an earlier attempt got stuck on.
 4. Reject plans that are not runnable (including a plan that marks a button as the booking step but still presses something before reading the confirmation). For a read, run the candidate and check it against the contract. For a booking, rehearse it up to the commit step, then run the steps after it on an existing booking and check that against the contract.
 5. Pass: promote it as the next version, mark `healthy`. Fail: add what went wrong to the list of attempts the model is told not to repeat, remember the page it got stuck on, and try again with backoff. If the remote browser drops mid-attempt, the same plan runs again in a new session instead of counting as a failed plan.
-6. After three failed attempts, keep the old plan, mark `degraded`, and say so. A degraded capability will not repair itself again until someone asks.
+6. After three failed attempts, keep the old plan, mark `degraded`, and say so. A degraded capability does not repair itself on every failure, but it is not stuck: a monitor alert or a person starts a fit check, and a failed booking 20 minutes after its last repair (`ANVIL_COOLDOWN_MINUTES`) gets one fresh repair.
 
 Running out of Anakin credits or model requests stops a repair as `capped` instead: that says nothing about the site, so the capability is not degraded for it, and the page plays the recorded repair.
 
@@ -73,7 +74,11 @@ Every call to the remote browser has a deadline. A connection that drops without
 
 ### Proactive repair
 
-Anakin Website Monitoring watches a read-only view of the demo site's entry page (`/harbor-lane/`). When it sees a change it posts a signed alert to `/api/hooks/site-changed`. Anvil checks the HMAC signature and timestamp, ignores retries of a delivery it has already handled, and queues a repair. The page picks the repair up on its own, before any run has failed.
+Anakin Website Monitoring watches a read-only view of the demo site's entry page (`/harbor-lane/`). When it sees a change it posts a signed alert to `/api/hooks/site-changed`. Anvil checks the HMAC signature and timestamp, ignores retries of a delivery it has already handled, and queues a repair, which starts with the fit check above. The page picks it up on its own, before any run has failed.
+
+That check matters here: the monitor compares the page's HTML, and Cloudflare puts a fresh security token into that HTML on every request, so on this deployment every scheduled check reports a change (verified 2026-09-14 by diffing two stored snapshots: the only other lines that differed were a real change made to the demo site between the two checks). Before the fit check, each of those alerts started a full repair with model calls on a site that had not changed in any way that mattered.
+
+Anyone can ask the monitor to look now with **Ask Anakin to check the website now** (`POST /api/check`): it calls the monitor's run endpoint (2 credits), one check every three minutes for everyone. Anakin does not move a monitor's `lastCheckedAt` for a check asked for this way, so the page watches for a new snapshot or change instead. Without a monitor (a local copy, the bench) the button starts the fit check directly.
 
 ### Reading any (allowlisted) site
 
@@ -97,7 +102,7 @@ The *Read another site* form turns a URL and a sentence into a read capability (
 | **Crawl** | Samples candidate pages, and reads the entry page's link text when URLs are meaningless. | The page choice is a guess from URLs alone. On scrapethissite.com that guess picked the wrong page; the countries list sits at `/pages/simple/`. |
 | **Wire catalog + resolve-actions** | Checked before any derivation: domain match against the catalog, then resolve-actions ranks actions for the goal. | Anvil spends a minute of model calls deriving plans for sites Anakin already solved. |
 | **Wire execute-task + get-job** | Runs the chosen prebuilt action (for Hacker News, `hn_stories`) as the capability's plan, on every run. | Covered sites fall back to slower, more fragile derived plans. |
-| **Website Monitoring** | Watches the demo site; a change starts a repair before anyone's run fails. | Repair only ever happens after a run has already failed in front of someone. |
+| **Website Monitoring** | Watches the demo site, and checks it on demand from the page. A reported change starts a fit check, and a repair only if the saved steps no longer fit. | Repair only ever happens after a run has already failed in front of someone. |
 | **Webhooks** | The monitor's HMAC-signed alert is what wakes Anvil up. | Anvil would have to poll for changes, or wait for a failure. |
 
 Not used, and not claimed: Search, Agentic Search, Browser Sessions, and Wire's create-build-request.
@@ -118,7 +123,7 @@ What Anvil adds, concretely:
 - **A repair is only kept if it passes a contract learned from the first good run** — types, record counts, fields that must echo the inputs, and a second channel (the site's own records) that must agree with the confirmation. Details that may change are learned rather than failed. Failed repairs roll back and the capability says it is degraded.
 - **Repairs do not make bookings.** They rehearse up to the booking button and test reading steps on a booking that already exists; the one real booking happens after promotion.
 - **Triage before repair.** A network blip, a bot block and an empty result are not repaired; only structural failures are, and a degraded capability stops trying.
-- **Repair can start before anything fails,** from a Website Monitoring webhook.
+- **Repair can start before anything fails, and only starts for a change that matters.** A Website Monitoring alert, or anyone pressing the check button, first checks the saved steps against the live site without a model or a booking. New wording and colours end as "nothing to fix".
 - **Anyone can watch it happen on the deployed site,** break it themselves, and read every decision in the trace.
 
 ## What was verified, and when
@@ -141,6 +146,8 @@ On 2026-09-14:
 
 - **Repair bench** (`npm run bench`, the real API, worker and repair loop against a local copy of the demo site in a local Chrome): 10 of 10 cases passed — rename a field, add a review page, split the form over two pages, rebuild the confirmation page, a typed change, three surprises, the wrong-room trap and the new reference format. Every repair was promoted (seven on the first attempt, one on the second), the median repair took 12s, and the site-side booking count went up by 0 during every repair. The wrong-room booking was caught as a mismatch and not repaired; the new reference format passed with the check updated.
 - **The bench found three real bugs before this was deployed:** a model marked the button in front of a new review page as the booking step (a plan like that is now rejected), a value typed on the first page of a split form was invisible to the read-back, and page trimming cut the detail rows of a rebuilt confirmation page down to three, which made that repair fail one run in three (now four of four on the first attempt).
+- **Only a real change is repaired** (bench, 15 of 15 with the cases below added): new wording, labels and colours, then "check the website now" ended as nothing to fix in 2s with no model asked and nothing booked; the same check after renaming the email box, and after rebuilding the confirmation page, found the saved steps no longer fit (a missing selector; the last good booking no longer read back) and repaired them with 0 bookings; a capability marked as needing a person went back to healthy when a check found its steps still fit, and, marked that way again, a failed booking after the cooldown got one repair and one real booking.
+- **The check button on the deployed page, through Anakin Website Monitoring** (a headless browser pressing the real buttons): booked; changed only the wording and colours; pressed *Ask Anakin to check the website now*; Anakin's signed alert arrived and the fit check ended as nothing to fix in 40s, 1 browser credit, no model call. Three minutes later: renamed the email box, pressed it again; the fit check found 1 of 7 saved selectors gone, the repair promoted v2 in 66s with one model call and 0 bookings, and the next booking succeeded on v2. No console errors. 14 credits for the whole arc, including both monitor checks.
 - **Deployed arc on Anakin's browser:** first booking and a check learned with the site's own records; review page added; booking failed as structural; the repair rehearsed without booking, worked out that the failed run had booked nothing, checked the new reading steps on the last good booking, promoted v2 in 67s (after two models were unavailable), counted 0 bookings during the repair, and made the one real booking, which passed. Then the wrong-room trap: caught as a mismatch, no repair. 5 credits.
 
 ## Limitations
@@ -156,7 +163,9 @@ On 2026-09-14:
 - **"Did the failed run book?" is inferred** from whether the page it stopped on still shows the form the new plan books from. A site whose confirmation page carries an identical form would be misread.
 - **One shared demo.** One worker does one job at a time, everyone sees the same demo site (and each other's bookings and repairs), and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
 - **Doing things is only shown on the demo site.** The browser plans work on any site, but the booking's first plan was written by hand and Anvil repairs it from there; it does not yet derive a new write capability from a sentence. Deriving from a sentence is shown for reading, on real sites.
-- **The monitor checks every four hours** to keep credits down. The proactive demo above used an on-demand check.
+- **The monitor checks every four hours** to keep credits down; the page's button asks for a check on demand.
+- **A fit check cannot see past the booking button.** It rehearses up to it and reads the last good booking, but what pressing it leads to (a new "check your details" page) only shows on a real booking. That change passes the fit check; the next booking then fails without booking anything, and the repair runs from there.
+- **Failed runs are not fit-checked.** A structural failure goes straight to a repair, so the one-off step timeout below can still cause a repair that was not needed.
 - **Crawl's `includePatterns` only filter the first few links it discovers,** so Anvil starts crawls at the page it wants instead.
 
 ## Running it yourself

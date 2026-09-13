@@ -26,9 +26,15 @@ export function freshConfig() {
     // traps: the site lies on its confirmation page, or changes how references look
     wrongRoom: false,
     referenceStyle: 'HL',
+    // wording and colours only; nothing a booking depends on
+    intro: 'Rooms seat up to eight. We hold a room for fifteen minutes past the start time.',
+    banner: null,
+    colors: { ink: '#1f3a2e', paper: '#f6f4ef' },
     breaks: [],
   };
 }
+
+const COSMETIC_LABELS = { name: 'Your name', email: 'Email address', seats: 'How many seats', room: 'Which room', date: 'Day', time: 'Start time' };
 
 export const BREAKS = {
   'rename-field': 'Rename the email field',
@@ -38,6 +44,7 @@ export const BREAKS = {
   surprise: 'A random change nobody scripted',
   'wrong-room': 'Quietly book a different room than the one asked for, while the confirmation page shows the right one',
   'new-reference-format': 'Switch booking references to a new format',
+  cosmetic: 'Change only the wording and colours: new title, labels and banner, same form underneath',
   custom: 'A change the visitor typed in',
 };
 
@@ -171,6 +178,19 @@ export function applyBreak(config, kind, key, params) {
     config.referenceStyle = 'BK';
     mark(config, { kind });
     return { changed: true, detail: 'booking references now look like BK-2026-4821-07 instead of HL-3B9AC9' };
+  }
+  if (kind === 'cosmetic') {
+    if (config.banner) return { changed: false, detail: 'the new wording and colours are already in place' };
+    Object.assign(config, {
+      title: 'Book a quiet place to study',
+      intro: 'Every room seats up to eight people. Arrive within fifteen minutes of your start time and the room is yours.',
+      banner: 'New this term: the library stays open until 9pm on weekdays.',
+      colors: { ink: '#5b2a86', paper: '#fbf7ff' },
+    });
+    const before = config.fields.map((f) => f.label);
+    for (const f of config.fields) f.label = COSMETIC_LABELS[f.key] ?? f.label;
+    mark(config, { kind });
+    return { changed: true, detail: `new title "${config.title}", a banner, purple colours, and the boxes now read ${config.fields.map((f) => `"${f.label}"`).join(', ')} (were ${before.map((l) => `"${l}"`).join(', ')}). Box names, the form and the button are unchanged` };
   }
   if (kind === 'custom') return custom(config, params);
   throw new Error(`unknown break kind "${kind}"`);

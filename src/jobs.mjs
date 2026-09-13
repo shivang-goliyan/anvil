@@ -46,7 +46,7 @@ export async function queueRun(capabilityId, inputs, { afterRepair = null } = {}
   });
 }
 
-export async function queueRepair(capabilityId, { trigger, failure, inputs, runId, stuckOn } = {}) {
+export async function queueRepair(capabilityId, { trigger, failure, inputs, runId, stuckOn, asked = false } = {}) {
   const busy = await db.repairAttempt.findFirst({ where: { capabilityId, outcome: { in: ['queued', 'running'] } }, select: { id: true } });
   if (busy) throw new Busy('a repair for this capability is already queued or running', { repairId: busy.id });
 
@@ -55,7 +55,7 @@ export async function queueRepair(capabilityId, { trigger, failure, inputs, runI
     const repair = await tx.repairAttempt.create({ data: { capabilityId, trigger, fromPlanId: cap?.planId } });
     await tx.job.create({ data: { kind: 'repair', refId: repair.id, payload: { failure, inputs, runId, stuckOn: stuckOn ?? null } } });
     await tx.traceEvent.create({
-      data: { repairId: repair.id, seq: 1, kind: 'queued', label: `repair queued (${trigger})`, detail: { trigger, runId: runId ?? null } },
+      data: { repairId: repair.id, seq: 1, kind: 'queued', label: `repair queued (${trigger})`, detail: { trigger, runId: runId ?? null, asked } },
     });
     return repair;
   });

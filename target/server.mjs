@@ -29,8 +29,9 @@ function layout(title, body) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · ${esc(config.org)}</title>
 <style>
-  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #f6f4ef; color: #1d1d1b; }
-  .site-header, .site-footer { padding: 14px 24px; background: #1f3a2e; color: #f6f4ef; }
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: ${config.colors.paper}; color: #1d1d1b; }
+  .site-header, .site-footer { padding: 14px 24px; background: ${config.colors.ink}; color: #f6f4ef; }
+  .banner { margin: 0; padding: 10px 24px; background: #efe3fb; color: #3d1d5c; font-size: 14px; }
   .site-header a { color: inherit; text-decoration: none; font-weight: 600; }
   .site-footer { font-size: 13px; background: #e7e2d6; color: #555; }
   main { max-width: 520px; margin: 32px auto; padding: 0 24px; }
@@ -43,7 +44,7 @@ function layout(title, body) {
   input, select { width: 100%; padding: 8px; font: inherit; box-sizing: border-box; }
   .site-header nav { float: right; font-size: 14px; }
   .site-header nav a { font-weight: 500; }
-  button { margin-top: 24px; padding: 10px 18px; font: inherit; background: #1f3a2e; color: #fff; border: 0; }
+  button { margin-top: 24px; padding: 10px 18px; font: inherit; background: ${config.colors.ink}; color: #fff; border: 0; }
   .error { color: #a3261f; font-size: 14px; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
   dt { color: #555; }
@@ -51,6 +52,7 @@ function layout(title, body) {
 </head>
 <body>
 <header class="site-header"><a href="/">${esc(config.org)}</a><nav><a href="/find">Find my booking</a></nav></header>
+${config.banner ? `<p class="banner">${esc(config.banner)}</p>` : ''}
 ${body}
 <footer class="site-footer">Demo target for Anvil. This site is owned by the project so it can be broken on purpose.</footer>
 </body>
@@ -80,7 +82,7 @@ function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.
     config.title,
     `<main>
 <h1>${esc(config.title)}</h1>
-<p>Rooms seat up to eight. We hold a room for fifteen minutes past the start time.</p>
+<p>${esc(config.intro)}</p>
 ${step ? `<p class="steps">${esc(step)}</p>` : ''}
 ${Object.keys(errors).length ? '<p class="error" role="alert">Please fix the highlighted fields.</p>' : ''}
 <form id="${id}" method="post" action="${action}" novalidate>
