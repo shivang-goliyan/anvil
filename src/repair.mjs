@@ -1,7 +1,7 @@
 import { openBrowser, scrape, keepAlive } from './anakin.mjs';
 import { runPlan, checkPlanShape } from './plan.mjs';
 import { checkContract } from './contract.mjs';
-import { pageShape, formMarkup, diffShapes } from './page-shape.mjs';
+import { pageShape, formMarkup, diffShapes, compactHtml } from './page-shape.mjs';
 import { derivePlan } from './derive.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
@@ -23,7 +23,7 @@ async function readEntryPage(cap, session, log) {
 }
 
 // Replace a broken plan. Promotes only on a passing contract, otherwise rolls back and degrades.
-export async function executeRepair(repairId, { failure, inputs } = {}, log) {
+export async function executeRepair(repairId, { failure, inputs, stuckOn } = {}, log) {
   const rec = await db.repairAttempt.findUnique({ where: { id: repairId } });
   if (!rec) return log('error', 'this repair no longer exists (the capability was probably reset)');
   const cap = await loadCapability(rec.capabilityId);
@@ -80,6 +80,7 @@ export async function executeRepair(repairId, { failure, inputs } = {}, log) {
           outputFields: cap.contract.fieldTypes,
           previousPlan: previous,
           failure,
+          stuckOn,
           changes,
           shape: now.shape,
           markup: formMarkup(live.html),
@@ -107,8 +108,10 @@ export async function executeRepair(repairId, { failure, inputs } = {}, log) {
           onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.selector ?? s.url ?? Object.keys(s.fields ?? {}).join(', ')}`, { index: i, step: s }),
         });
       } catch (err) {
-        const then = pageShape(await session.page.content().catch(() => '')).shape;
-        feedback = `Running it failed: ${err.message}. The page at that moment had this structure: ${JSON.stringify(then)}`;
+        const html = await session.page.content().catch(() => '');
+        const then = pageShape(html).shape;
+        // the next attempt needs to see the page it got stuck on, including pages past the entry page
+        feedback = `Running it failed: ${err.message}. It was on ${session.page.url()}, which looks like this:\n${compactHtml(html, 8000)}`;
         rejections.push(`attempt ${n}: ${err.message}`);
         log('execute', `candidate plan failed: ${err.message}`, { url: err.url ?? null, docStatus: err.docStatus ?? null, pageAtFailure: then });
         continue;

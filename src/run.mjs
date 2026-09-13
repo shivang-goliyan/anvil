@@ -1,7 +1,7 @@
 import { openBrowser } from './anakin.mjs';
 import { runPlan } from './plan.mjs';
 import { deriveContract, checkContract } from './contract.mjs';
-import { pageShape } from './page-shape.mjs';
+import { pageShape, compactHtml } from './page-shape.mjs';
 import { triage } from './triage.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
@@ -63,9 +63,11 @@ async function attempt(cap, inputs, log) {
     }
     const canaryPresent = (await session.page.locator(cap.canary).count().catch(() => 0)) > 0;
     const pageText = error ? await session.page.innerText('body').catch(() => '') : '';
-    // structure only, raw page html never goes into the trace
-    const pageAtFailure = error ? pageShape(await session.page.content().catch(() => '')).shape : null;
-    return { result, error, canaryPresent, pageText, pageAtFailure };
+    // structure only in the trace; the trimmed markup goes to the repair job, never to the UI
+    const failedHtml = error ? await session.page.content().catch(() => '') : '';
+    const pageAtFailure = error ? pageShape(failedHtml).shape : null;
+    const stuckOn = error ? { url: session.page.url(), html: compactHtml(failedHtml, 8000) } : null;
+    return { result, error, canaryPresent, pageText, pageAtFailure, stuckOn };
   } finally {
     const ms = await session.close();
     log('browser', `closed session after ${(ms / 1000).toFixed(1)}s`, { ms });
@@ -76,7 +78,7 @@ async function attempt(cap, inputs, log) {
 async function runCapability(cap, inputs, log) {
   for (let tryNo = 1; tryNo <= 3; tryNo++) {
     log('run', `running plan v${cap.plan.version}${tryNo > 1 ? ` (retry ${tryNo - 1})` : ''}`, { planId: cap.plan.id, version: cap.plan.version, try: tryNo });
-    const { result, error, canaryPresent, pageText, pageAtFailure } = await attempt(cap, inputs, log);
+    const { result, error, canaryPresent, pageText, pageAtFailure, stuckOn } = await attempt(cap, inputs, log);
 
     if (error instanceof OverBudget) {
       log('budget', `${error.message}. Not calling Anakin.`, { used: error.used, cap: error.cap });
@@ -130,7 +132,7 @@ async function runCapability(cap, inputs, log) {
       await setStatus(cap.id, 'degraded');
       log('health', 'capability marked degraded. A new plan cannot fix a block, so no repair', { status: 'degraded' });
     }
-    return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records };
+    return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records, stuckOn };
   }
 }
 
@@ -157,7 +159,7 @@ export async function executeRun(runId, log) {
       log('repair', 'capability is degraded, so it will not auto-repair. A manual repair can still be triggered', { circuitBreaker: true });
     } else {
       try {
-        const repair = await queueRepair(cap.id, { trigger: 'run-failure', failure: out.why, inputs: run.inputs, runId });
+        const repair = await queueRepair(cap.id, { trigger: 'run-failure', failure: out.why, inputs: run.inputs, runId, stuckOn: out.stuckOn });
         result.repairId = repair.id;
         log('repair', 'structural failure, queued a repair', { repairId: repair.id });
       } catch (err) {
