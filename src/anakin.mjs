@@ -1,6 +1,7 @@
 import { chromium } from 'playwright-core';
 import { checkBudget, recordSpend, creditsUsed, hourlyCap } from './budget.mjs';
 import { AnakinError } from './errors.mjs';
+import { mayFetch } from './conduct.mjs';
 
 export { AnakinError };
 
@@ -26,14 +27,38 @@ async function request(method, path, body, timeoutMs = 120_000) {
     throw new AnakinError(`could not reach Anakin: ${err.message}`, { code: 'network' });
   }
   const json = await res.json().catch(() => ({}));
-  if (res.status >= 400) throw new AnakinError(json.message ?? json.error ?? `Anakin said ${res.status}`, { status: res.status, code: json.error });
+  if (res.status >= 400) {
+    // most endpoints say {error: "..."}, Wire says {error: {code, message}}
+    const e = json.error;
+    throw new AnakinError(e?.message ?? json.message ?? (typeof e === 'string' ? e : null) ?? `Anakin said ${res.status}`, { status: res.status, code: e?.code ?? (typeof e === 'string' ? e : undefined) });
+  }
   return { status: res.status, json };
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const plural = (n) => `${n} credit${n === 1 ? '' : 's'}`;
+
+async function spent(kind, credits, note, log, detail) {
+  await recordSpend(kind, credits, note);
+  log?.('anakin', `${kind}, ${plural(credits)} (${await creditsUsed()}/${hourlyCap()} this hour)`, { call: kind, credits, ...detail });
+}
+
+// Map and Crawl hand back a jobId and finish later.
+async function waitFor(path, what, { every = 2000, limit = 90 } = {}) {
+  for (let i = 0; i < limit; i++) {
+    const { json } = await request('GET', path);
+    if (json.status === 'completed') return json;
+    if (json.status === 'failed') throw new AnakinError(`${what} failed: ${json.error?.message ?? json.error ?? 'no reason given'}`, { code: 'job_failed' });
+    await sleep(json.retry_after_ms ?? every);
+  }
+  throw new AnakinError(`${what} never finished`, { code: 'timeout' });
+}
+
 // Inline scrape, falling back to polling when the 90s inline window runs out (202).
-export async function scrape(url, { log } = {}) {
+export async function scrape(url, { log, formats } = {}) {
+  await mayFetch(url);
   const { used, cap } = await checkBudget(1);
-  let { status, json } = await request('POST', '/url-scraper/scrape', { url });
+  let { status, json } = await request('POST', '/url-scraper/scrape', { url, ...(formats && { formats }) });
   for (let i = 0; status === 202 || json.status === 'pending' || json.status === 'processing'; i++) {
     if (i > 60) throw new AnakinError(`scrape of ${url} never finished`, { code: 'timeout' });
     await new Promise((r) => setTimeout(r, 2000));
@@ -43,8 +68,71 @@ export async function scrape(url, { log } = {}) {
   // cached answers are free
   const cost = json.cached ? 0 : 1;
   await recordSpend('scrape', cost, url);
-  log?.('anakin', `url scraper, ${cost} credit${cost === 1 ? '' : 's'} (${used + cost}/${cap} this hour)`, { call: 'scrape', credits: cost, cached: !!json.cached });
+  log?.('anakin', `url scraper, ${plural(cost)} (${used + cost}/${cap} this hour)${json.cached ? ', served from cache' : ''}`, { call: 'scrape', credits: cost, cached: !!json.cached, url });
   return json;
+}
+
+// PNG bytes of a screenshot taken during a scrape that asked for the screenshot format.
+export async function screenshot(jobId) {
+  await checkBudget(0);
+  const res = await fetch(`${API}/url-scraper/${jobId}/screenshot`, { headers: { 'X-API-Key': key() }, signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new AnakinError(`screenshot download said ${res.status}`, { status: res.status });
+  return Buffer.from(await res.arrayBuffer());
+}
+
+export async function mapSite(url, { limit = 100, depth = 1, log } = {}) {
+  await mayFetch(url);
+  await checkBudget(1);
+  const { json } = await request('POST', '/map', { url, limit, depth });
+  const done = await waitFor(`/map/${json.jobId}`, `map of ${url}`);
+  await spent('map', 1, url, log, { url, links: done.links?.length ?? 0 });
+  return done;
+}
+
+// Crawl is charged up front for maxPages, whatever it ends up fetching.
+export async function crawl(url, { maxPages = 3, includePatterns, log } = {}) {
+  await mayFetch(url);
+  await checkBudget(maxPages);
+  const { json } = await request('POST', '/crawl', { url, maxPages, ...(includePatterns?.length && { includePatterns }) });
+  await spent('crawl', maxPages, url, log, { url, maxPages, includePatterns: includePatterns ?? null });
+  return waitFor(`/crawl/${json.jobId}`, `crawl of ${url}`, { limit: 120 });
+}
+
+let catalogs = null;
+
+// Wire discovery is free. The catalog list barely changes, so it is fetched once per process.
+export async function wireCatalogs() {
+  await checkBudget(0);
+  if (!catalogs || Date.now() - catalogs.at > 6 * 60 * 60 * 1000) catalogs = { at: Date.now(), list: (await request('GET', '/wire/catalog')).json.catalog ?? [] };
+  return catalogs.list;
+}
+
+export async function wireCatalog(slug) {
+  await checkBudget(0);
+  return (await request('GET', `/wire/catalog/${encodeURIComponent(slug)}`)).json;
+}
+
+export async function wireResolve(q) {
+  await checkBudget(0);
+  return (await request('GET', `/wire/resolve?q=${encodeURIComponent(q)}`)).json.results ?? [];
+}
+
+// Runs a prebuilt action. Wire takes the credits at submit and refunds them if the job fails.
+export async function wireTask(actionId, params, { credits = 1, siteUrl, log } = {}) {
+  if (siteUrl) await mayFetch(siteUrl);
+  await checkBudget(credits);
+  const { json } = await request('POST', '/wire/task', { action_id: actionId, params });
+  await spent('wire', credits, actionId, log, { actionId });
+  let job;
+  try {
+    job = await waitFor(`/wire/jobs/${json.job_id}`, `wire action ${actionId}`, { limit: 120 });
+  } catch (err) {
+    if (err.code === 'job_failed') await recordSpend('wire', -credits, `${actionId} refunded`);
+    throw err;
+  }
+  const used = job.credits_used ?? credits;
+  if (used !== credits) await recordSpend('wire', used - credits, `${actionId} settled at ${used}`);
+  return job;
 }
 
 // Anakin sometimes has no warm browser ready (ws close 1013) or hiccups with a 503. Worth a retry.

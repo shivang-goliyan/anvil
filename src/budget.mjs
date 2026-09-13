@@ -23,5 +23,6 @@ export async function checkBudget(credits = 1) {
 
 // There is no balance endpoint, so these are the published prices, not a meter reading.
 export async function recordSpend(kind, credits, note) {
-  if (credits > 0) await db.creditSpend.create({ data: { kind, credits, note } });
+  // negative rows are refunds (Wire gives credits back for a failed job)
+  if (credits !== 0) await db.creditSpend.create({ data: { kind, credits, note } });
 }
