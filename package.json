@@ -11,7 +11,8 @@
     "worker": "node --env-file=.env src/worker.mjs",
     "target": "node --env-file=.env target/server.mjs",
     "phase2": "node --env-file=.env scripts/phase2.mjs",
-    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs"
+    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "7.10.0",
