@@ -4,11 +4,11 @@ An agent that operates websites, and when a site changes under it, throws its pl
 
 **Try it: https://attirebytatsavi.com** — no key, no sign-up, no install.
 
-1. Run *Reserve a study room*. Anvil books a real room on the demo site through a remote browser and reads back the confirmation.
+1. Press **Send Anvil to book it**. Anvil books a real room on the demo site through a remote browser and reads back the confirmation. The page shows each step in plain words, with screenshots of what the remote browser actually saw.
 2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick one of four specific breaks: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page.
 3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, checks it against the contract, promotes it, and the same booking goes through.
 
-Everything shows up as a trace: every step, decision, diff and model call, in order. The demo site belongs to this project. That is on purpose: you cannot show an agent surviving a site change on a site you are not allowed to change.
+Everything shows up in order, in plain words first (what changed on the site, the new steps, the check the booking passed) with the code, selectors and raw trace one click away. The demo site belongs to this project. That is on purpose: you cannot show an agent surviving a site change on a site you are not allowed to change.
 
 ## What it does
 
@@ -26,7 +26,7 @@ flowchart LR
   api -- rows --> db[(SQLite: capabilities, plans, contracts,<br/>runs, repairs, trace, jobs)]
   worker[Worker] -- polls jobs --> db
   worker -- runs plans, re-reads pages --> anakin[Anakin: Browser API, URL Scraper,<br/>Map, Crawl, Wire]
-  worker -- derives plans --> model[Model via OpenRouter]
+  worker -- derives plans --> model[Free models: Groq, Gemini, OpenRouter]
   monitor[Anakin Website Monitoring] -- signed webhook --> api
   page -- polls trace every second --> api
 ```
@@ -53,12 +53,18 @@ Every failed run is classified before anything is repaired. Repairing on every f
 
 1. Mark the capability `repairing`.
 2. Re-read the live entry page and diff its structure against the snapshot the old plan was derived from ("field `email` is gone; an email field `contact_email` sits in the same position, likely a rename").
-3. Ask the model for a new plan from the goal, the old plan, how it failed, the diff, the live page and the page the old plan got stuck on.
+3. Ask the model for a new plan from the goal, the old plan, how it failed, the diff, the live page and every page an earlier attempt got stuck on.
 4. Reject plans that are not runnable, run the candidate for real, and check the result against the contract.
-5. Pass: promote it as the next version, mark `healthy`. Fail: feed back what went wrong (including the page the candidate got stuck on) and try again, with backoff.
+5. Pass: promote it as the next version, mark `healthy`. Fail: add what went wrong to the list of attempts the model is told not to repeat, remember the page it got stuck on, and try again with backoff. If the remote browser drops mid-attempt, the same plan runs again in a new session instead of counting as a failed plan.
 6. After three failed attempts, keep the old plan, mark `degraded`, and say so. A degraded capability will not repair itself again until someone asks.
 
-Running out of Anakin credits or model requests stops a repair as `capped` instead: that says nothing about the site, so the capability is not degraded for it.
+Running out of Anakin credits or model requests stops a repair as `capped` instead: that says nothing about the site, so the capability is not degraded for it, and the page plays the recorded repair.
+
+Every call to the remote browser has a deadline. A connection that drops without closing used to leave a run waiting forever (seen once: eight minutes on one step); now a missed deadline marks the session dead, the run is triaged as transient and retried in a fresh session.
+
+### Models
+
+`LLM_MODEL` is a comma-separated chain tried in order, for example `groq:llama-3.3-70b-versatile, gemini:gemini-2.5-flash, nex-agi/nex-n2.5-pro:free`. `groq:` and `gemini:` go to those providers' OpenAI-compatible endpoints, a bare name goes to OpenRouter (or to `LLM_BASE_URL` when set). All three have free tiers. A model that fails sits out for ten minutes; a key that reports its daily quota is used up rests until midnight UTC, and the next entry is tried.
 
 ### Proactive repair
 
@@ -119,24 +125,28 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **Triage** live: target stopped → transient, three tries, plan untouched; a real 403 → blocked and degraded; a degraded capability with a structural failure → no repair queued.
 - **Read capabilities** from sites never touched before: python.org upcoming events, x-rates.com USD rates, scrapethissite.com countries, quotes.toscrape.com quotes (all derived), and news.ycombinator.com via Wire's `hn_stories`. lobste.rs was refused before any credit was spent: its robots.txt disallows everything.
 - **Crash recovery**: a worker killed mid-repair had its job reclaimed and finished by a new worker.
-- **Surprise breaks** keep the demo site bookable: six random draws, some stacked on the review step and the seats-first flow, all booked through the changed markup over plain HTTP. Repairs against a surprise break use the same loop as the scripted breaks.
+- **Surprise breaks** keep the demo site bookable: six random draws, some stacked on the review step and the seats-first flow, all booked through the changed markup over plain HTTP.
+- **Stacked surprise repairs**: a surprise that renamed the email field and the confirmation ids was repaired in two attempts and the next booking succeeded; a second surprise on top (new form id, new button text, new confirmation ids) failed on its first attempt, was repaired on its second with the confirmation page from the first attempt in the prompt, and the next booking read back the right reference, name, email and seats. The first version of this test degraded, which is what led to attempts keeping every page and rejection.
+- **Dropped connections**: reproduced with a local Chrome behind a relay that stops forwarding without closing. The code before the deadlines was still stuck after three minutes; with them the run was retried in a fresh session after 11 seconds and finished.
+- **The page, end to end** in a headless browser: book, rename the email field, book (fails, structural), repair promoted, book again, with screenshots from the remote browser at each press and at the failure, and no console errors.
 
 ## Limitations
 
 - **Rendering JavaScript costs time.** A rendered read takes around 20 seconds instead of 4.
-- **Free models.** Plans come from free models through OpenRouter. A call takes 10 to 130 seconds, each account gets roughly 50 requests a day, and one of them sometimes answers with nothing. A repair can take a couple of minutes and, on a bad day, fail and degrade. Running out of requests stops repairs as `capped`.
+- **Free models.** Plans come from free tiers. A call takes 5 to 130 seconds depending on the provider, daily allowances are small (OpenRouter's is about 50 requests per account), and free models sometimes answer with nothing. A repair can take a couple of minutes and, on a bad day, fail and degrade. When every key in the chain is out of requests, repairs stop as `capped` and the page plays the recording.
 - **The demo site is not on the public internet for runs.** Anakin's browser loads a made-up origin (`harbor-lane.anvil.test`) and the worker answers those requests from the site running on the same machine. `/harbor-lane/` is a read-only public view for the monitor. So repairs re-read the page through the browser; the URL Scraper re-read path for public targets is written but was not exercised.
 - **Read capabilities are not repaired automatically yet.** Their runs are triaged, but a structural failure is only reported.
 - **Contracts on changing lists can be too strict.** The Hacker News capability requires a `url` on every story; an "Ask HN" post on the front page would fail it.
 - **A step can time out on a page that did not change.** Seen twice in testing, cause unknown. It is triaged as structural and triggers a repair that was not needed. The page structure at failure is stored to diagnose it.
 - **The credit cap is an estimate** from published prices, and a browser session that runs past two minutes can overshoot it by a credit. Screenshots from the scraper are sometimes missing.
+- **Booking steps are not undone.** A repair attempt runs its candidate plan for real, so an attempt that books a room and then fails the contract (for example, it could not read the new confirmation page) still leaves that booking on the demo site. A real site would need a cancel step or a sandbox account for repair attempts.
 - **One shared demo.** One worker does one job at a time, everyone sees the same demo site, and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
 - **The monitor checks every four hours** to keep credits down. The proactive demo above used an on-demand check.
 - **Crawl's `includePatterns` only filter the first few links it discovers,** so Anvil starts crawls at the page it wants instead.
 
 ## Running it yourself
 
-Needs Node 22 with type stripping on by default (the generated Prisma client is TypeScript; tested on 22.22 and 22.23), an [Anakin](https://anakin.io) API key and an [OpenRouter](https://openrouter.ai) key.
+Needs Node 22 with type stripping on by default (the generated Prisma client is TypeScript; tested on 22.22 and 22.23), an [Anakin](https://anakin.io) API key and at least one model key: [Groq](https://console.groq.com), [Google AI Studio](https://aistudio.google.com) or [OpenRouter](https://openrouter.ai), all free.
 
 ```bash
 git clone https://github.com/shivang-goliyan/anvil.git && cd anvil
@@ -150,12 +160,12 @@ npm run api                 # the page and API on :3310
 npm run worker              # runs, repairs, derivations
 ```
 
-Open http://localhost:3310. Useful `.env` values: `LLM_MODEL` takes a comma-separated fallback list (for example `nex-agi/nex-n2.5-pro:free,nvidia/nemotron-3-super-120b-a12b:free`), `TARGET_ADMIN_TOKEN` is any long random string, `ALLOWED_SITES` lists the domains read capabilities may touch.
+Open http://localhost:3310. Useful `.env` values: `LLM_MODEL` takes the fallback chain described under *Models*, `TARGET_ADMIN_TOKEN` is any long random string, `ALLOWED_SITES` lists the domains read capabilities may touch.
 
 Checks and scripts:
 
 ```bash
-npm test                    # triage, robots.txt, extraction, Wire records
+npm test                    # triage, robots.txt, extraction, Wire records, the model chain
 npm run phase2              # run -> break -> fail -> repair -> run, through the API
 npm run breaks              # all four break kinds, stacked
 npm run phase3 -- "https://quotes.toscrape.com/|the quotes with their author and tags"
@@ -169,7 +179,7 @@ Deployment: `deploy/` has the three systemd units and the Caddy block used for t
 - robots.txt and a domain allowlist are checked before every third-party fetch, including the ones Anakin makes for us.
 - Public endpoints are rate limited by IP; breaking the demo site more strictly than anything else.
 - No credentials are collected or stored anywhere. No logged-in third-party sites.
-- The page never shows raw scraped HTML: structure and extracted values only.
+- The page never shows raw scraped HTML: structure and extracted values only. Screenshots are only taken in the remote browser, which only ever drives the project's own demo site.
 - A global hourly Anakin credit cap, with a clearly labelled recorded run past it.
 
 ## Layout

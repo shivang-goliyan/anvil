@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anvil — a web agent that repairs itself when sites change</title>
-<meta name="description" content="Anvil books, fills and reads on real websites. When a site changes, it works out a new plan from the live page and keeps it only if the result still passes its contract. Break the demo site and watch.">
+<meta name="description" content="Anvil books rooms on a real website through a cloud browser. Change that website and watch Anvil notice, work out new steps from the live page, and prove the fix with a real booking.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,78 +17,113 @@
   <nav class="nav">
     <a class="brand" href="/" aria-label="Anvil home">anvil<i></i></a>
     <label class="nav-cap">
-      <span class="sr">Capability</span>
+      <span class="sr">What Anvil should do</span>
       <select id="capability"></select>
     </label>
     <span class="health" id="health" aria-live="polite"></span>
     <div class="nav-end">
-      <button type="button" class="btn ghost" id="replay-button" title="Replays a real run recorded earlier. Costs nothing, and says it is a recording.">Watch a recorded run</button>
+      <button type="button" class="btn ghost" id="replay-button" title="Replays a real run recorded earlier. Costs nothing, and says it is a recording.">Watch a recording</button>
       <a class="btn ghost hide-sm" href="https://github.com/shivang-goliyan/anvil" target="_blank" rel="noopener">Source</a>
-      <button type="button" class="btn blue" id="nav-run">Run</button>
+      <button type="button" class="btn blue" id="nav-run">Book a room</button>
     </div>
   </nav>
 </header>
 
 <section class="hero">
   <div class="hero-title">
-    <p class="eyebrow"><span class="live-dot"></span>Live on real infrastructure · no setup</p>
+    <p class="eyebrow"><span class="live-dot"></span>Live demo · everything here runs for real · nothing to install</p>
     <h1>Websites change.<br><em>Anvil repairs itself.</em></h1>
   </div>
   <div class="hero-copy">
-    <p class="lede">An agent that books, fills and reads on real websites. When a site changes under it, it doesn't patch a selector. It works out a whole new plan from the live page, and keeps it only if the result still passes what it learned the first time.</p>
-    <ol class="howto">
-      <li><b>1</b><span>Run the booking</span></li>
-      <li><b>2</b><span>Break the site</span></li>
-      <li><b>3</b><span>Watch it repair</span></li>
-    </ol>
+    <p class="lede">Anvil is an agent that uses websites the way a person does. It opens the page, types, presses buttons and reads what comes back. When the website changes under it, Anvil notices, works out new steps from the live page, and keeps them only once a real result proves they work.</p>
+    <p class="lede small">Here it books study rooms on a small library website. You get to change that website, and see what Anvil does about it.</p>
   </div>
 
   <form class="composer" id="run-form" autocomplete="off">
-    <p class="composer-kicker" id="composer-kicker">Try it</p>
+    <p class="composer-kicker" id="composer-kicker">Step 1 · tell Anvil what to book</p>
     <div class="sentence" id="sentence"></div>
     <div class="composer-foot">
-      <button type="submit" class="btn blue big" id="run-button">Run it <span aria-hidden="true">→</span></button>
-      <button type="button" class="btn outline" id="repair-button" hidden>Repair now</button>
+      <button type="submit" class="btn blue big" id="run-button">Send Anvil to book it <span aria-hidden="true">→</span></button>
+      <button type="button" class="btn outline" id="repair-button" hidden>Ask it to repair now</button>
     </div>
+    <p class="composer-hint" id="composer-hint">A real browser in the cloud opens the library's booking page, fills it in and presses the button. About 15 seconds.</p>
     <p class="notice" id="run-notice" role="status"></p>
   </form>
 </section>
 
+<section class="explain" aria-label="What this demo is">
+  <article>
+    <p class="kicker"><i>A</i>The website</p>
+    <h3>Harbor Lane Library</h3>
+    <p>A small study-room booking site. We built it and host it for this demo, because you can only fairly show an agent surviving website changes on a website you are allowed to change.</p>
+    <a class="more" href="/harbor-lane/" target="_blank" rel="noopener">Open the website <span aria-hidden="true">↗</span></a>
+  </article>
+  <article>
+    <p class="kicker"><i>B</i>Anvil's job</p>
+    <h3>Book a room, like a person would</h3>
+    <p>Anvil drives a real cloud browser through Anakin: it opens the booking page, types the name, email and number of seats, presses the button, and reads the booking reference off the confirmation page.</p>
+  </article>
+  <article>
+    <p class="kicker"><i>C</i>The twist</p>
+    <h3>You change the website</h3>
+    <p>Rename a box, add a page, or let the site scramble itself at random. Anvil's saved steps stop fitting. Nobody tells it what changed. Watch it work that out and prove the fix with a real booking.</p>
+  </article>
+</section>
+
 <main class="stage">
   <section class="timeline" id="timeline" aria-live="polite" aria-label="What Anvil did">
+    <div class="story" id="story">
+      <ol>
+        <li data-stage="booked"><i>1</i><span>Book a room</span></li>
+        <li data-stage="changed"><i>2</i><span>Change the website</span></li>
+        <li data-stage="fixed"><i>3</i><span>Anvil fixes itself</span></li>
+        <li data-stage="again"><i>4</i><span>Book again</span></li>
+      </ol>
+      <p id="story-hint"></p>
+    </div>
     <div class="empty" id="empty">
-      <h2>The trace shows up here.</h2>
-      <p>Every run, repair and decision, in order, as it happens. Press <b>Run it</b>, or watch a recorded run first if you want to see the whole story without waiting.</p>
+      <h2>What Anvil does shows up here.</h2>
+      <p>Every step in plain words, with pictures of the website exactly as Anvil's cloud browser saw it. Press <b>Send Anvil to book it</b>, or watch a recording first if you would rather see the whole story without waiting.</p>
     </div>
   </section>
 
   <aside class="rail">
     <section class="card site-card" id="site-card">
       <header class="card-head">
-        <h3>The demo site</h3>
+        <h3>The website Anvil works on</h3>
         <span class="tag" id="site-version"></span>
       </header>
-      <div class="browser" id="browser"></div>
+      <a class="site-live" id="site-live" href="/harbor-lane/" target="_blank" rel="noopener" title="Open Harbor Lane Library in a new tab">
+        <iframe id="site-frame" title="Harbor Lane Library, as it is right now" sandbox="" tabindex="-1" aria-hidden="true"></iframe>
+        <span class="site-open">live <b>Open ↗</b></span>
+      </a>
       <p class="card-note" id="owned"></p>
+      <h4 class="rail-sub">Change the website</h4>
+      <p class="card-note tight">Each button really changes the site. Anvil is not told what changed.</p>
       <div class="breaks" id="breaks"></div>
       <p class="notice" id="site-notice" role="status"></p>
+      <details class="flow">
+        <summary>How its pages fit together right now</summary>
+        <div class="browser" id="browser"></div>
+      </details>
       <p class="card-note monitor" id="monitor" hidden></p>
     </section>
 
     <section class="card" id="plans-card">
-      <header class="card-head"><h3>Plan history</h3><span class="tag" id="plans-count"></span></header>
+      <header class="card-head"><h3>Anvil's saved steps</h3><span class="tag" id="plans-count"></span></header>
+      <p class="card-note top">Every time Anvil fixes itself, the new steps are saved as a new version.</p>
       <ol class="plans" id="plans"></ol>
     </section>
 
     <section class="card" id="anakin-card">
-      <header class="card-head"><h3>Anakin this hour</h3><span class="tag" id="credits"></span></header>
+      <header class="card-head"><h3>Anakin credits this hour</h3><span class="tag" id="credits"></span></header>
       <div class="meter"><i id="credit-bar"></i></div>
-      <p class="card-note">Every run is live and costs real credits. Past the hourly budget, you get a recorded run instead, labelled as one.</p>
+      <p class="card-note">Every booking uses real cloud-browser credits. Past the hourly budget you get a recording instead, labelled as one.</p>
     </section>
 
     <details class="card read-card" id="read-card">
-      <summary><h3>Read another site</h3><span class="tag">beta</span></summary>
-      <p class="card-note">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the page and derives a plan. Read-only, robots.txt respected. Allowed: <span id="allowed"></span>.</p>
+      <summary><h3>Read another website</h3><span class="tag">beta</span></summary>
+      <p class="card-note">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the right page and works out how to read it. Read-only, and it respects robots.txt. Allowed: <span id="allowed"></span>.</p>
       <form id="read-form" autocomplete="off">
         <input name="url" type="url" placeholder="https://quotes.toscrape.com/" required aria-label="Page URL">
         <input name="goal" placeholder="the quotes with their author and tags" required minlength="10" maxlength="300" aria-label="What you want">
@@ -101,11 +136,11 @@
 
 <footer class="deep">
   <div class="deep-inner">
-    <p class="eyebrow light">How it works</p>
+    <p class="eyebrow light">How it works, for the technical crowd</p>
     <h2><span>Most self-healing tools patch a selector.</span><br>Anvil re-derives the plan, then proves it.</h2>
     <div class="pillars">
       <article><b>01</b><h4>Triage first</h4><p>A network blip is retried, a bot block is reported, an empty page is fine. Only a real structural change triggers a repair.</p></article>
-      <article><b>02</b><h4>Whole-plan repair</h4><p>The model sees the goal, the old plan, what changed, and the exact page the old plan got stuck on, then writes every step again.</p></article>
+      <article><b>02</b><h4>Whole-plan repair</h4><p>The model sees the goal, the old plan, what changed, and every page an attempt got stuck on, then writes every step again.</p></article>
       <article><b>03</b><h4>Contract gate</h4><p>The first good run teaches types, bounds and echoes. A new plan is promoted only if its result passes. Three failures roll back, honestly.</p></article>
       <article><b>04</b><h4>Before anything fails</h4><p>Anakin Website Monitoring watches the site. When it changes, a signed webhook starts the repair before anyone's run breaks.</p></article>
     </div>
