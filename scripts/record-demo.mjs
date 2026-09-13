@@ -30,7 +30,7 @@ const planOf = async (id) => (id ? (await db.plan.findUnique({ where: { id }, se
 
 async function runJob(run, note) {
   const trace = await db.traceEvent.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' }, select: pick });
-  return { type: 'run', note, subtitle: `plan v${(await planOf(run.planId))?.version}`, trace, final: { run, capability: { name: cap.name, plan: await planOf(run.planId) } } };
+  return { type: 'run', note, subtitle: `plan v${(await planOf(run.planId))?.version}`, trace, final: { run, capability: { name: cap.name, engine: cap.engine, plan: await planOf(run.planId) } } };
 }
 
 const jobs = [];

@@ -73,6 +73,8 @@ function stepText(s) {
 const FIELD_WORDS = { reference: 'the booking reference', name: 'the name', email: 'the email', seats: 'the number of seats' };
 
 function boxLabel(selector) {
+  // a recording ran against the site as it was then, so the labels on the site now could be wrong
+  if (replaying) return null;
   const sel = String(selector ?? '');
   const name = sel.match(/name\s*=\s*["']?([\w-]+)/)?.[1] ?? sel.match(/#([\w-]+)/)?.[1];
   return site?.fields?.find((f) => f.name === name)?.label ?? null;
@@ -369,7 +371,8 @@ function verdictBox(kind, { why, at, reason }) {
 }
 
 function runView(card, capability) {
-  const booking = capability?.engine === 'browser';
+  // recordings are only ever of the booking, and older ones do not say which engine they used
+  const booking = (capability?.engine ?? 'browser') === 'browser';
   card.heading.textContent = booking ? 'Anvil books a room' : 'Anvil reads the page';
   const list = checklist();
   const view = viewer();
@@ -522,7 +525,7 @@ function repairView(card) {
       } else if (e.kind === 'derive' && /^skipped/.test(e.label)) {
         skipped++;
       } else if (e.kind === 'derive') {
-        add({ icon: '✎', title: `New steps written in ${(d.ms / 1000).toFixed(1)}s`, text: `by ${d.model}${skipped ? `, after ${skipped} busy model${skipped === 1 ? '' : 's'} were skipped` : ''}` });
+        add({ icon: '✎', title: `New steps written in ${(d.ms / 1000).toFixed(1)}s`, text: `by ${d.model}${skipped ? `, after skipping ${skipped} model${skipped === 1 ? '' : 's'} that ${skipped === 1 ? 'was' : 'were'} busy or out of free requests` : ''}` });
         skipped = 0;
       } else if (e.kind === 'plan') {
         add({ icon: '≡', tone: 'good', title: 'The new steps', extra: plainDiff(fromSteps ?? [], d.steps ?? []) });

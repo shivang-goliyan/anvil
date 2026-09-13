@@ -1,5 +1,5 @@
 {
- "recordedAt": "2026-09-13T08:55:46.073Z",
+ "recordedAt": "2026-09-13T11:40:41.870Z",
  "capability": "Reserve a study room",
  "jobs": [
   {
@@ -18,28 +18,28 @@
        "seats": 3
       }
      },
-     "createdAt": "2026-09-13T08:55:46.075Z"
+     "createdAt": "2026-09-13T11:40:41.876Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v1",
      "detail": {
-      "planId": "cmtzkx02200003efjyqb3arq9",
+      "planId": "cmtzqt1s40000kfjrz8s6um2c",
       "version": 1,
       "try": 1
      },
-     "createdAt": "2026-09-13T08:55:47.066Z"
+     "createdAt": "2026-09-13T11:40:42.711Z"
     },
     {
      "seq": 3,
      "kind": "anakin",
-     "label": "browser session opened, 1 credit (80/100 this hour)",
+     "label": "browser session opened, 1 credit (1/20 this hour)",
      "detail": {
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T08:55:50.001Z"
+     "createdAt": "2026-09-13T11:40:46.899Z"
     },
     {
      "seq": 4,
@@ -52,7 +52,7 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T08:55:50.118Z"
+     "createdAt": "2026-09-13T11:40:47.376Z"
     },
     {
      "seq": 5,
@@ -66,7 +66,7 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T08:55:50.655Z"
+     "createdAt": "2026-09-13T11:40:48.431Z"
     },
     {
      "seq": 6,
@@ -80,7 +80,7 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T08:55:51.846Z"
+     "createdAt": "2026-09-13T11:40:50.580Z"
     },
     {
      "seq": 7,
@@ -94,7 +94,7 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T08:55:52.293Z"
+     "createdAt": "2026-09-13T11:40:51.750Z"
     },
     {
      "seq": 8,
@@ -107,10 +107,21 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T08:55:52.757Z"
+     "createdAt": "2026-09-13T11:40:52.914Z"
     },
     {
      "seq": 9,
+     "kind": "shot",
+     "label": "page before step 5",
+     "detail": {
+      "src": "/api/demo/shots/mtzqtd5f-e8105f9f.jpg",
+      "index": 4,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:40:54.104Z"
+    },
+    {
+     "seq": 10,
      "kind": "step",
      "label": "6. assert #reference",
      "detail": {
@@ -120,10 +131,10 @@
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T08:55:53.966Z"
+     "createdAt": "2026-09-13T11:40:56.675Z"
     },
     {
-     "seq": 10,
+     "seq": 11,
      "kind": "step",
      "label": "7. extract reference, name, email, seats",
      "detail": {
@@ -150,35 +161,46 @@
        }
       }
      },
-     "createdAt": "2026-09-13T08:55:56.161Z"
-    },
-    {
-     "seq": 11,
-     "kind": "browser",
-     "label": "closed session after 6.9s",
-     "detail": {
-      "ms": 6894
-     },
-     "createdAt": "2026-09-13T08:55:57.017Z"
+     "createdAt": "2026-09-13T11:40:59.626Z"
     },
     {
      "seq": 12,
+     "kind": "shot",
+     "label": "page before step 7",
+     "detail": {
+      "src": "/api/demo/shots/mtzqtid4-ef20e123.jpg",
+      "index": 6,
+      "kind": "extract"
+     },
+     "createdAt": "2026-09-13T11:41:00.858Z"
+    },
+    {
+     "seq": 13,
+     "kind": "browser",
+     "label": "closed session after 16.0s",
+     "detail": {
+      "ms": 16032
+     },
+     "createdAt": "2026-09-13T11:41:03.422Z"
+    },
+    {
+     "seq": 14,
      "kind": "result",
      "label": "extracted 1 record",
      "detail": {
       "records": [
        {
-        "reference": "HL-7733E8",
+        "reference": "HL-6A4F5F",
         "name": "Priya Raman",
         "email": "priya.raman@example.com",
         "seats": 3
        }
       ]
      },
-     "createdAt": "2026-09-13T08:55:57.018Z"
+     "createdAt": "2026-09-13T11:41:03.424Z"
     },
     {
-     "seq": 13,
+     "seq": 15,
      "kind": "contract",
      "label": "golden sample captured. required: reference, name, email, seats",
      "detail": {
@@ -206,24 +228,24 @@
        "seats": "seats"
       }
      },
-     "createdAt": "2026-09-13T08:55:57.026Z"
+     "createdAt": "2026-09-13T11:41:03.460Z"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "kind": "done",
      "label": "run succeeded",
      "detail": {
       "status": "succeeded",
       "failureKind": null
      },
-     "createdAt": "2026-09-13T08:55:57.027Z"
+     "createdAt": "2026-09-13T11:41:03.461Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzkx02h00013efjuuho2xvh",
+     "id": "cmtzqt3pq0001kfjrzz07diwf",
      "capabilityId": "reserve-room",
-     "planId": "cmtzkx02200003efjyqb3arq9",
+     "planId": "cmtzqt1s40000kfjrz8s6um2c",
      "inputs": {
       "name": "Priya Raman",
       "email": "priya.raman@example.com",
@@ -233,7 +255,7 @@
      "result": {
       "records": [
        {
-        "reference": "HL-7733E8",
+        "reference": "HL-6A4F5F",
         "name": "Priya Raman",
         "email": "priya.raman@example.com",
         "seats": 3
@@ -241,23 +263,72 @@
       ]
      },
      "failureKind": null,
-     "startedAt": "2026-09-13T08:55:47.059Z",
-     "endedAt": "2026-09-13T08:55:57.027Z",
-     "createdAt": "2026-09-13T08:55:46.073Z"
+     "startedAt": "2026-09-13T11:40:42.698Z",
+     "endedAt": "2026-09-13T11:41:03.471Z",
+     "createdAt": "2026-09-13T11:40:41.870Z"
     },
     "capability": {
      "name": "Reserve a study room",
      "plan": {
       "version": 1,
       "origin": "hand-written",
-      "stepCount": 7
+      "steps": [
+       {
+        "kind": "navigate",
+        "url": "/"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"full_name\"]",
+        "value": "{{name}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"email\"]",
+        "value": "{{email}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"seats\"]",
+        "value": "{{seats}}"
+       },
+       {
+        "kind": "submit",
+        "selector": "#reserve-form button[type=\"submit\"]"
+       },
+       {
+        "kind": "assert",
+        "selector": "#reference"
+       },
+       {
+        "kind": "extract",
+        "fields": {
+         "reference": {
+          "selector": "#reference",
+          "type": "string"
+         },
+         "name": {
+          "selector": ".summary-name",
+          "type": "string"
+         },
+         "email": {
+          "selector": ".summary-email",
+          "type": "string"
+         },
+         "seats": {
+          "selector": ".summary-seats",
+          "type": "number"
+         }
+        }
+       }
+      ]
      }
     }
    }
   },
   {
    "type": "run",
-   "note": "Then the demo site was changed: a \"check your details\" page now sits between the form and the booking. Same plan, same kind of run:",
+   "note": "Then the demo site was changed: bookings now go through a \"check your details\" page with its own confirm button. Same plan, same kind of run:",
    "subtitle": "plan v1",
    "trace": [
     {
@@ -271,28 +342,28 @@
        "seats": 5
       }
      },
-     "createdAt": "2026-09-13T08:55:57.126Z"
+     "createdAt": "2026-09-13T11:41:07.997Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v1",
      "detail": {
-      "planId": "cmtzkx02200003efjyqb3arq9",
+      "planId": "cmtzqt1s40000kfjrz8s6um2c",
       "version": 1,
       "try": 1
      },
-     "createdAt": "2026-09-13T08:55:58.033Z"
+     "createdAt": "2026-09-13T11:41:08.507Z"
     },
     {
      "seq": 3,
      "kind": "anakin",
-     "label": "browser session opened, 1 credit (81/100 this hour)",
+     "label": "browser session opened, 1 credit (2/20 this hour)",
      "detail": {
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T08:56:00.885Z"
+     "createdAt": "2026-09-13T11:41:12.306Z"
     },
     {
      "seq": 4,
@@ -305,7 +376,7 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T08:56:00.944Z"
+     "createdAt": "2026-09-13T11:41:12.807Z"
     },
     {
      "seq": 5,
@@ -319,7 +390,7 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:01.446Z"
+     "createdAt": "2026-09-13T11:41:14.057Z"
     },
     {
      "seq": 6,
@@ -333,7 +404,7 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:02.164Z"
+     "createdAt": "2026-09-13T11:41:16.200Z"
     },
     {
      "seq": 7,
@@ -347,7 +418,7 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:02.473Z"
+     "createdAt": "2026-09-13T11:41:17.374Z"
     },
     {
      "seq": 8,
@@ -360,10 +431,21 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T08:56:02.813Z"
+     "createdAt": "2026-09-13T11:41:18.548Z"
     },
     {
      "seq": 9,
+     "kind": "shot",
+     "label": "page before step 5",
+     "detail": {
+      "src": "/api/demo/shots/mtzqtx3z-6ef241f7.jpg",
+      "index": 4,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:41:19.969Z"
+    },
+    {
+     "seq": 10,
      "kind": "step",
      "label": "6. assert #reference",
      "detail": {
@@ -373,25 +455,36 @@
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T08:56:03.705Z"
-    },
-    {
-     "seq": 10,
-     "kind": "browser",
-     "label": "closed session after 9.0s",
-     "detail": {
-      "ms": 9010
-     },
-     "createdAt": "2026-09-13T08:56:09.955Z"
+     "createdAt": "2026-09-13T11:41:22.612Z"
     },
     {
      "seq": 11,
+     "kind": "shot",
+     "label": "page where it got stuck",
+     "detail": {
+      "src": "/api/demo/shots/mtzqu4pf-3a4937f6.jpg",
+      "index": 5,
+      "stuck": true
+     },
+     "createdAt": "2026-09-13T11:41:29.813Z"
+    },
+    {
+     "seq": 12,
+     "kind": "browser",
+     "label": "closed session after 18.0s",
+     "detail": {
+      "ms": 17953
+     },
+     "createdAt": "2026-09-13T11:41:30.761Z"
+    },
+    {
+     "seq": 13,
      "kind": "error",
      "label": "step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
      "detail": {
       "reason": "selector-missing",
       "step": 5,
-      "url": "https://harbor-lane.anvil.test/reserve/review?t=434a2d4c70c565be",
+      "url": "https://harbor-lane.anvil.test/reserve/review?t=444d2be538b21ea7",
       "docStatus": 200,
       "pageAtFailure": {
        "title": "Check your details · Harbor Lane Library",
@@ -414,43 +507,43 @@
        ]
       }
      },
-     "createdAt": "2026-09-13T08:56:09.955Z"
+     "createdAt": "2026-09-13T11:41:30.763Z"
     },
     {
-     "seq": 12,
+     "seq": 14,
      "kind": "triage",
      "label": "structural: page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
      "detail": {
       "kind": "structural",
       "canaryPresent": true
      },
-     "createdAt": "2026-09-13T08:56:09.956Z"
+     "createdAt": "2026-09-13T11:41:30.763Z"
     },
     {
-     "seq": 13,
+     "seq": 15,
      "kind": "repair",
      "label": "structural failure, queued a repair",
      "detail": {
-      "repairId": "cmtzkxii0000143fjaxe28u7g"
+      "repairId": "cmtzqu5g70001ksjrjnqu0gkx"
      },
-     "createdAt": "2026-09-13T08:56:09.962Z"
+     "createdAt": "2026-09-13T11:41:30.783Z"
     },
     {
-     "seq": 14,
+     "seq": 16,
      "kind": "done",
      "label": "run failed (structural)",
      "detail": {
       "status": "failed",
       "failureKind": "structural"
      },
-     "createdAt": "2026-09-13T08:56:09.963Z"
+     "createdAt": "2026-09-13T11:41:30.784Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzkx8lh00033efjcmcw1114",
+     "id": "cmtzqtnvf0003kfjro2l24cyl",
      "capabilityId": "reserve-room",
-     "planId": "cmtzkx02200003efjyqb3arq9",
+     "planId": "cmtzqt1s40000kfjrz8s6um2c",
      "inputs": {
       "name": "Tomas Ortega",
       "email": "tomas.ortega@example.com",
@@ -460,19 +553,68 @@
      "result": {
       "records": [],
       "why": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
-      "repairId": "cmtzkxii0000143fjaxe28u7g"
+      "repairId": "cmtzqu5g70001ksjrjnqu0gkx"
      },
      "failureKind": "structural",
-     "startedAt": "2026-09-13T08:55:58.032Z",
-     "endedAt": "2026-09-13T08:56:09.963Z",
-     "createdAt": "2026-09-13T08:55:57.125Z"
+     "startedAt": "2026-09-13T11:41:08.505Z",
+     "endedAt": "2026-09-13T11:41:30.785Z",
+     "createdAt": "2026-09-13T11:41:07.995Z"
     },
     "capability": {
      "name": "Reserve a study room",
      "plan": {
       "version": 1,
       "origin": "hand-written",
-      "stepCount": 7
+      "steps": [
+       {
+        "kind": "navigate",
+        "url": "/"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"full_name\"]",
+        "value": "{{name}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"email\"]",
+        "value": "{{email}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"seats\"]",
+        "value": "{{seats}}"
+       },
+       {
+        "kind": "submit",
+        "selector": "#reserve-form button[type=\"submit\"]"
+       },
+       {
+        "kind": "assert",
+        "selector": "#reference"
+       },
+       {
+        "kind": "extract",
+        "fields": {
+         "reference": {
+          "selector": "#reference",
+          "type": "string"
+         },
+         "name": {
+          "selector": ".summary-name",
+          "type": "string"
+         },
+         "email": {
+          "selector": ".summary-email",
+          "type": "string"
+         },
+         "seats": {
+          "selector": ".summary-seats",
+          "type": "number"
+         }
+        }
+       }
+      ]
      }
     }
    }
@@ -487,19 +629,19 @@
      "label": "repair queued (run-failure)",
      "detail": {
       "trigger": "run-failure",
-      "runId": "cmtzkx8lh00033efjcmcw1114"
+      "runId": "cmtzqtnvf0003kfjro2l24cyl"
      },
-     "createdAt": "2026-09-13T08:56:09.962Z"
+     "createdAt": "2026-09-13T11:41:30.780Z"
     },
     {
      "seq": 2,
      "kind": "repair",
      "label": "repair started (run-failure), setting plan v1 aside",
      "detail": {
-      "fromPlanId": "cmtzkx02200003efjyqb3arq9",
+      "fromPlanId": "cmtzqt1s40000kfjrz8s6um2c",
       "failure": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded."
      },
-     "createdAt": "2026-09-13T08:56:09.970Z"
+     "createdAt": "2026-09-13T11:41:30.810Z"
     },
     {
      "seq": 3,
@@ -508,7 +650,7 @@
      "detail": {
       "status": "repairing"
      },
-     "createdAt": "2026-09-13T08:56:09.971Z"
+     "createdAt": "2026-09-13T11:41:30.812Z"
     },
     {
      "seq": 4,
@@ -517,17 +659,17 @@
      "detail": {
       "attempt": 1
      },
-     "createdAt": "2026-09-13T08:56:09.971Z"
+     "createdAt": "2026-09-13T11:41:30.812Z"
     },
     {
      "seq": 5,
      "kind": "anakin",
-     "label": "browser session opened, 1 credit (82/100 this hour)",
+     "label": "browser session opened, 1 credit (3/20 this hour)",
      "detail": {
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T08:56:13.041Z"
+     "createdAt": "2026-09-13T11:41:34.660Z"
     },
     {
      "seq": 6,
@@ -537,32 +679,32 @@
       "before": "8adb2fdfc7498992",
       "after": "8adb2fdfc7498992"
      },
-     "createdAt": "2026-09-13T08:56:13.633Z"
+     "createdAt": "2026-09-13T11:41:36.181Z"
     },
     {
      "seq": 7,
      "kind": "diff",
      "label": "no structural change detected on the entry page",
      "detail": null,
-     "createdAt": "2026-09-13T08:56:13.634Z"
+     "createdAt": "2026-09-13T11:41:36.185Z"
     },
     {
      "seq": 8,
      "kind": "derive",
-     "label": "skipped model key 1: model call failed (429): Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day",
+     "label": "skipped model openrouter key 1: out of free requests for today",
      "detail": null,
-     "createdAt": "2026-09-13T08:56:47.233Z"
+     "createdAt": "2026-09-13T11:42:18.291Z"
     },
     {
      "seq": 9,
      "kind": "derive",
-     "label": "new plan from nex-agi/nex-n2.5-pro:free in 33.1s",
+     "label": "new plan from nex-agi/nex-n2.5-pro:free in 42.0s",
      "detail": {
       "model": "nex-agi/nex-n2.5-pro:free",
-      "ms": 33135,
-      "promptChars": 3079
+      "ms": 41972,
+      "promptChars": 3070
      },
-     "createdAt": "2026-09-13T08:56:47.233Z"
+     "createdAt": "2026-09-13T11:42:18.292Z"
     },
     {
      "seq": 10,
@@ -595,7 +737,7 @@
        },
        {
         "kind": "assert",
-        "selector": "#confirm-form button"
+        "selector": "#confirm-form"
        },
        {
         "kind": "submit",
@@ -628,7 +770,7 @@
        }
       ]
      },
-     "createdAt": "2026-09-13T08:56:47.234Z"
+     "createdAt": "2026-09-13T11:42:18.293Z"
     },
     {
      "seq": 11,
@@ -641,7 +783,7 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T08:56:47.234Z"
+     "createdAt": "2026-09-13T11:42:18.294Z"
     },
     {
      "seq": 12,
@@ -655,7 +797,7 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:47.591Z"
+     "createdAt": "2026-09-13T11:42:19.325Z"
     },
     {
      "seq": 13,
@@ -669,7 +811,7 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:48.224Z"
+     "createdAt": "2026-09-13T11:42:21.527Z"
     },
     {
      "seq": 14,
@@ -683,7 +825,7 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T08:56:48.511Z"
+     "createdAt": "2026-09-13T11:42:22.731Z"
     },
     {
      "seq": 15,
@@ -696,23 +838,34 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T08:56:48.792Z"
+     "createdAt": "2026-09-13T11:42:23.933Z"
     },
     {
      "seq": 16,
+     "kind": "shot",
+     "label": "page before step 5",
+     "detail": {
+      "src": "/api/demo/shots/mtzqvbem-30b2832b.jpg",
+      "index": 4,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:42:25.153Z"
+    },
+    {
+     "seq": 17,
      "kind": "step",
-     "label": "6. assert #confirm-form button",
+     "label": "6. assert #confirm-form",
      "detail": {
       "index": 5,
       "step": {
        "kind": "assert",
-       "selector": "#confirm-form button"
+       "selector": "#confirm-form"
       }
      },
-     "createdAt": "2026-09-13T08:56:49.595Z"
+     "createdAt": "2026-09-13T11:42:27.759Z"
     },
     {
-     "seq": 17,
+     "seq": 18,
      "kind": "step",
      "label": "7. submit #confirm-form button",
      "detail": {
@@ -722,10 +875,21 @@
        "selector": "#confirm-form button"
       }
      },
-     "createdAt": "2026-09-13T08:56:51.839Z"
+     "createdAt": "2026-09-13T11:42:30.793Z"
     },
     {
-     "seq": 18,
+     "seq": 19,
+     "kind": "shot",
+     "label": "page before step 7",
+     "detail": {
+      "src": "/api/demo/shots/mtzqvgrh-8fe283a6.jpg",
+      "index": 6,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:42:32.096Z"
+    },
+    {
+     "seq": 20,
      "kind": "step",
      "label": "8. assert #reference",
      "detail": {
@@ -735,10 +899,10 @@
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T08:56:52.840Z"
+     "createdAt": "2026-09-13T11:42:34.700Z"
     },
     {
-     "seq": 19,
+     "seq": 21,
      "kind": "step",
      "label": "9. extract reference, name, email, seats",
      "detail": {
@@ -765,16 +929,27 @@
        }
       }
      },
-     "createdAt": "2026-09-13T08:56:54.918Z"
+     "createdAt": "2026-09-13T11:42:37.736Z"
     },
     {
-     "seq": 20,
+     "seq": 22,
+     "kind": "shot",
+     "label": "page before step 9",
+     "detail": {
+      "src": "/api/demo/shots/mtzqvm3n-dafe3350.jpg",
+      "index": 8,
+      "kind": "extract"
+     },
+     "createdAt": "2026-09-13T11:42:39.012Z"
+    },
+    {
+     "seq": 23,
      "kind": "validate",
      "label": "contract passed",
      "detail": {
       "records": [
        {
-        "reference": "HL-42E3B2",
+        "reference": "HL-E09C57",
         "name": "Tomas Ortega",
         "email": "tomas.ortega@example.com",
         "seats": 5
@@ -782,36 +957,93 @@
       ],
       "problems": []
      },
-     "createdAt": "2026-09-13T08:56:55.673Z"
+     "createdAt": "2026-09-13T11:42:41.186Z"
     },
     {
-     "seq": 21,
+     "seq": 24,
      "kind": "promote",
      "label": "plan v2 promoted, capability healthy",
      "detail": {
-      "planId": "cmtzkyhrx000343fjdvmm9o76",
+      "planId": "cmtzqvnsg0003ksjrw3yucz8g",
       "version": 2
      },
-     "createdAt": "2026-09-13T08:56:55.679Z"
+     "createdAt": "2026-09-13T11:42:41.209Z"
     }
    ],
    "final": {
     "repair": {
-     "id": "cmtzkxii0000143fjaxe28u7g",
+     "id": "cmtzqu5g70001ksjrjnqu0gkx",
      "capabilityId": "reserve-room",
-     "fromPlanId": "cmtzkx02200003efjyqb3arq9",
-     "toPlanId": "cmtzkyhrx000343fjdvmm9o76",
+     "fromPlanId": "cmtzqt1s40000kfjrz8s6um2c",
+     "toPlanId": "cmtzqvnsg0003ksjrw3yucz8g",
      "trigger": "run-failure",
      "outcome": "repaired",
      "diagnosis": "no structural change detected on the entry page",
-     "createdAt": "2026-09-13T08:56:09.960Z"
+     "createdAt": "2026-09-13T11:41:30.775Z"
     },
     "capability": {
      "name": "Reserve a study room",
      "plan": {
       "version": 2,
       "origin": "repair (nex-agi/nex-n2.5-pro:free)",
-      "stepCount": 9
+      "steps": [
+       {
+        "kind": "navigate",
+        "url": "/"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"full_name\"]",
+        "value": "{{name}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"email\"]",
+        "value": "{{email}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"seats\"]",
+        "value": "{{seats}}"
+       },
+       {
+        "kind": "submit",
+        "selector": "#reserve-form button[type=\"submit\"]"
+       },
+       {
+        "kind": "assert",
+        "selector": "#confirm-form"
+       },
+       {
+        "kind": "submit",
+        "selector": "#confirm-form button"
+       },
+       {
+        "kind": "assert",
+        "selector": "#reference"
+       },
+       {
+        "kind": "extract",
+        "fields": {
+         "reference": {
+          "selector": "#reference",
+          "type": "string"
+         },
+         "name": {
+          "selector": ".summary-name",
+          "type": "string"
+         },
+         "email": {
+          "selector": ".summary-email",
+          "type": "string"
+         },
+         "seats": {
+          "selector": ".summary-seats",
+          "type": "number"
+         }
+        }
+       }
+      ]
      }
     },
     "fromPlan": {
@@ -897,7 +1129,7 @@
       },
       {
        "kind": "assert",
-       "selector": "#confirm-form button"
+       "selector": "#confirm-form"
       },
       {
        "kind": "submit",
@@ -943,33 +1175,33 @@
      "label": "run queued, waiting for the worker",
      "detail": {
       "inputs": {
-       "name": "Priya Raman",
-       "email": "priya.raman@example.com",
-       "seats": 3
+       "name": "Amara Okafor",
+       "email": "amara.okafor@example.com",
+       "seats": 2
       }
      },
-     "createdAt": "2026-09-13T08:56:56.282Z"
+     "createdAt": "2026-09-13T11:42:44.352Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v2",
      "detail": {
-      "planId": "cmtzkyhrx000343fjdvmm9o76",
+      "planId": "cmtzqvnsg0003ksjrw3yucz8g",
       "version": 2,
       "try": 1
      },
-     "createdAt": "2026-09-13T08:56:56.737Z"
+     "createdAt": "2026-09-13T11:42:44.476Z"
     },
     {
      "seq": 3,
      "kind": "anakin",
-     "label": "browser session opened, 1 credit (82/100 this hour)",
+     "label": "browser session opened, 1 credit (4/20 this hour)",
      "detail": {
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T08:56:59.567Z"
+     "createdAt": "2026-09-13T11:42:48.366Z"
     },
     {
      "seq": 4,
@@ -982,7 +1214,7 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T08:56:59.626Z"
+     "createdAt": "2026-09-13T11:42:48.830Z"
     },
     {
      "seq": 5,
@@ -996,7 +1228,7 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T08:57:00.093Z"
+     "createdAt": "2026-09-13T11:42:49.835Z"
     },
     {
      "seq": 6,
@@ -1010,7 +1242,7 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T08:57:00.711Z"
+     "createdAt": "2026-09-13T11:42:51.929Z"
     },
     {
      "seq": 7,
@@ -1024,7 +1256,7 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T08:57:00.999Z"
+     "createdAt": "2026-09-13T11:42:53.077Z"
     },
     {
      "seq": 8,
@@ -1037,23 +1269,34 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T08:57:01.285Z"
+     "createdAt": "2026-09-13T11:42:54.224Z"
     },
     {
      "seq": 9,
+     "kind": "shot",
+     "label": "page before step 5",
+     "detail": {
+      "src": "/api/demo/shots/mtzqvyqm-1f9fe4ac.jpg",
+      "index": 4,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:42:55.394Z"
+    },
+    {
+     "seq": 10,
      "kind": "step",
-     "label": "6. assert #confirm-form button",
+     "label": "6. assert #confirm-form",
      "detail": {
       "index": 5,
       "step": {
        "kind": "assert",
-       "selector": "#confirm-form button"
+       "selector": "#confirm-form"
       }
      },
-     "createdAt": "2026-09-13T08:57:02.076Z"
+     "createdAt": "2026-09-13T11:42:57.951Z"
     },
     {
-     "seq": 10,
+     "seq": 11,
      "kind": "step",
      "label": "7. submit #confirm-form button",
      "detail": {
@@ -1063,10 +1306,21 @@
        "selector": "#confirm-form button"
       }
      },
-     "createdAt": "2026-09-13T08:57:04.210Z"
+     "createdAt": "2026-09-13T11:43:00.880Z"
     },
     {
-     "seq": 11,
+     "seq": 12,
+     "kind": "shot",
+     "label": "page before step 7",
+     "detail": {
+      "src": "/api/demo/shots/mtzqw3ws-049a38c1.jpg",
+      "index": 6,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T11:43:02.095Z"
+    },
+    {
+     "seq": 13,
      "kind": "step",
      "label": "8. assert #reference",
      "detail": {
@@ -1076,10 +1330,10 @@
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T08:57:05.262Z"
+     "createdAt": "2026-09-13T11:43:04.641Z"
     },
     {
-     "seq": 12,
+     "seq": 14,
      "kind": "step",
      "label": "9. extract reference, name, email, seats",
      "detail": {
@@ -1106,85 +1360,153 @@
        }
       }
      },
-     "createdAt": "2026-09-13T08:57:07.472Z"
+     "createdAt": "2026-09-13T11:43:07.565Z"
     },
     {
-     "seq": 13,
-     "kind": "browser",
-     "label": "closed session after 8.7s",
+     "seq": 15,
+     "kind": "shot",
+     "label": "page before step 9",
      "detail": {
-      "ms": 8725
+      "src": "/api/demo/shots/mtzqw92q-719544e5.jpg",
+      "index": 8,
+      "kind": "extract"
      },
-     "createdAt": "2026-09-13T08:57:08.353Z"
+     "createdAt": "2026-09-13T11:43:08.789Z"
     },
     {
-     "seq": 14,
+     "seq": 16,
+     "kind": "browser",
+     "label": "closed session after 22.5s",
+     "detail": {
+      "ms": 22506
+     },
+     "createdAt": "2026-09-13T11:43:11.337Z"
+    },
+    {
+     "seq": 17,
      "kind": "result",
      "label": "extracted 1 record",
      "detail": {
       "records": [
        {
-        "reference": "HL-1B88B7",
-        "name": "Priya Raman",
-        "email": "priya.raman@example.com",
-        "seats": 3
+        "reference": "HL-2EA9E5",
+        "name": "Amara Okafor",
+        "email": "amara.okafor@example.com",
+        "seats": 2
        }
       ]
      },
-     "createdAt": "2026-09-13T08:57:08.353Z"
+     "createdAt": "2026-09-13T11:43:11.339Z"
     },
     {
-     "seq": 15,
+     "seq": 18,
      "kind": "contract",
      "label": "contract passed",
      "detail": {
       "problems": []
      },
-     "createdAt": "2026-09-13T08:57:08.354Z"
+     "createdAt": "2026-09-13T11:43:11.340Z"
     },
     {
-     "seq": 16,
+     "seq": 19,
      "kind": "done",
      "label": "run succeeded",
      "detail": {
       "status": "succeeded",
       "failureKind": null
      },
-     "createdAt": "2026-09-13T08:57:08.354Z"
+     "createdAt": "2026-09-13T11:43:11.341Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzkyi8p00053efjxhhwezge",
+     "id": "cmtzqvq7x0005kfjrrzhieem6",
      "capabilityId": "reserve-room",
-     "planId": "cmtzkyhrx000343fjdvmm9o76",
+     "planId": "cmtzqvnsg0003ksjrw3yucz8g",
      "inputs": {
-      "name": "Priya Raman",
-      "email": "priya.raman@example.com",
-      "seats": 3
+      "name": "Amara Okafor",
+      "email": "amara.okafor@example.com",
+      "seats": 2
      },
      "status": "succeeded",
      "result": {
       "records": [
        {
-        "reference": "HL-1B88B7",
-        "name": "Priya Raman",
-        "email": "priya.raman@example.com",
-        "seats": 3
+        "reference": "HL-2EA9E5",
+        "name": "Amara Okafor",
+        "email": "amara.okafor@example.com",
+        "seats": 2
        }
       ]
      },
      "failureKind": null,
-     "startedAt": "2026-09-13T08:56:56.736Z",
-     "endedAt": "2026-09-13T08:57:08.354Z",
-     "createdAt": "2026-09-13T08:56:56.281Z"
+     "startedAt": "2026-09-13T11:42:44.472Z",
+     "endedAt": "2026-09-13T11:43:11.342Z",
+     "createdAt": "2026-09-13T11:42:44.349Z"
     },
     "capability": {
      "name": "Reserve a study room",
      "plan": {
       "version": 2,
       "origin": "repair (nex-agi/nex-n2.5-pro:free)",
-      "stepCount": 9
+      "steps": [
+       {
+        "kind": "navigate",
+        "url": "/"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"full_name\"]",
+        "value": "{{name}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"email\"]",
+        "value": "{{email}}"
+       },
+       {
+        "kind": "fill",
+        "selector": "input[name=\"seats\"]",
+        "value": "{{seats}}"
+       },
+       {
+        "kind": "submit",
+        "selector": "#reserve-form button[type=\"submit\"]"
+       },
+       {
+        "kind": "assert",
+        "selector": "#confirm-form"
+       },
+       {
+        "kind": "submit",
+        "selector": "#confirm-form button"
+       },
+       {
+        "kind": "assert",
+        "selector": "#reference"
+       },
+       {
+        "kind": "extract",
+        "fields": {
+         "reference": {
+          "selector": "#reference",
+          "type": "string"
+         },
+         "name": {
+          "selector": ".summary-name",
+          "type": "string"
+         },
+         "email": {
+          "selector": ".summary-email",
+          "type": "string"
+         },
+         "seats": {
+          "selector": ".summary-seats",
+          "type": "number"
+         }
+        }
+       }
+      ]
      }
     }
    }
