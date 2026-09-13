@@ -1,5 +1,5 @@
 {
- "recordedAt": "2026-09-13T11:40:41.870Z",
+ "recordedAt": "2026-09-13T13:15:24.905Z",
  "capability": "Reserve a study room",
  "jobs": [
   {
@@ -18,18 +18,18 @@
        "seats": 3
       }
      },
-     "createdAt": "2026-09-13T11:40:41.876Z"
+     "createdAt": "2026-09-13T13:15:24.913Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v1",
      "detail": {
-      "planId": "cmtzqt1s40000kfjrz8s6um2c",
+      "planId": "cmtzu6urt00017hjrga9vjnjj",
       "version": 1,
       "try": 1
      },
-     "createdAt": "2026-09-13T11:40:42.711Z"
+     "createdAt": "2026-09-13T13:15:25.693Z"
     },
     {
      "seq": 3,
@@ -39,7 +39,7 @@
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T11:40:46.899Z"
+     "createdAt": "2026-09-13T13:15:29.674Z"
     },
     {
      "seq": 4,
@@ -52,10 +52,22 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T11:40:47.376Z"
+     "createdAt": "2026-09-13T13:15:30.177Z"
     },
     {
      "seq": 5,
+     "kind": "shot",
+     "label": "page after step 1",
+     "detail": {
+      "src": "/api/demo/shots/mtzu72o2-8864ce93.jpg",
+      "index": 0,
+      "kind": "navigate",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:15:32.549Z"
+    },
+    {
+     "seq": 6,
      "kind": "step",
      "label": "2. fill input[name=\"full_name\"]",
      "detail": {
@@ -66,10 +78,22 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T11:40:48.431Z"
+     "createdAt": "2026-09-13T13:15:32.551Z"
     },
     {
-     "seq": 6,
+     "seq": 7,
+     "kind": "shot",
+     "label": "page after step 2",
+     "detail": {
+      "src": "/api/demo/shots/mtzu75di-1ab38250.jpg",
+      "index": 1,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:15:36.056Z"
+    },
+    {
+     "seq": 8,
      "kind": "step",
      "label": "3. fill input[name=\"email\"]",
      "detail": {
@@ -80,10 +104,22 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T11:40:50.580Z"
+     "createdAt": "2026-09-13T13:15:36.057Z"
     },
     {
-     "seq": 7,
+     "seq": 9,
+     "kind": "shot",
+     "label": "page after step 3",
+     "detail": {
+      "src": "/api/demo/shots/mtzu77ap-86ecc66c.jpg",
+      "index": 2,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:15:38.548Z"
+    },
+    {
+     "seq": 10,
      "kind": "step",
      "label": "4. fill input[name=\"seats\"]",
      "detail": {
@@ -94,10 +130,22 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T11:40:51.750Z"
+     "createdAt": "2026-09-13T13:15:38.549Z"
     },
     {
-     "seq": 8,
+     "seq": 11,
+     "kind": "shot",
+     "label": "page after step 4",
+     "detail": {
+      "src": "/api/demo/shots/mtzu797o-49650040.jpg",
+      "index": 3,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:15:41.031Z"
+    },
+    {
+     "seq": 12,
      "kind": "step",
      "label": "5. submit #reserve-form button[type=\"submit\"]",
      "detail": {
@@ -107,21 +155,21 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T11:40:52.914Z"
+     "createdAt": "2026-09-13T13:15:41.032Z"
     },
     {
-     "seq": 9,
+     "seq": 13,
      "kind": "shot",
      "label": "page before step 5",
      "detail": {
-      "src": "/api/demo/shots/mtzqtd5f-e8105f9f.jpg",
+      "src": "/api/demo/shots/mtzu7a6h-043b6bc8.jpg",
       "index": 4,
       "kind": "submit"
      },
-     "createdAt": "2026-09-13T11:40:54.104Z"
+     "createdAt": "2026-09-13T13:15:42.286Z"
     },
     {
-     "seq": 10,
+     "seq": 14,
      "kind": "step",
      "label": "6. assert #reference",
      "detail": {
@@ -131,10 +179,10 @@
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T11:40:56.675Z"
+     "createdAt": "2026-09-13T13:15:45.075Z"
     },
     {
-     "seq": 11,
+     "seq": 15,
      "kind": "step",
      "label": "7. extract reference, name, email, seats",
      "detail": {
@@ -161,46 +209,46 @@
        }
       }
      },
-     "createdAt": "2026-09-13T11:40:59.626Z"
+     "createdAt": "2026-09-13T13:15:48.060Z"
     },
     {
-     "seq": 12,
+     "seq": 16,
      "kind": "shot",
      "label": "page before step 7",
      "detail": {
-      "src": "/api/demo/shots/mtzqtid4-ef20e123.jpg",
+      "src": "/api/demo/shots/mtzu7fnl-eeb6447e.jpg",
       "index": 6,
       "kind": "extract"
      },
-     "createdAt": "2026-09-13T11:41:00.858Z"
+     "createdAt": "2026-09-13T13:15:49.379Z"
     },
     {
-     "seq": 13,
+     "seq": 17,
      "kind": "browser",
-     "label": "closed session after 16.0s",
+     "label": "closed session after 21.9s",
      "detail": {
-      "ms": 16032
+      "ms": 21933
      },
-     "createdAt": "2026-09-13T11:41:03.422Z"
+     "createdAt": "2026-09-13T13:15:52.118Z"
     },
     {
-     "seq": 14,
+     "seq": 18,
      "kind": "result",
      "label": "extracted 1 record",
      "detail": {
       "records": [
        {
-        "reference": "HL-6A4F5F",
+        "reference": "HL-8E89CB",
         "name": "Priya Raman",
         "email": "priya.raman@example.com",
         "seats": 3
        }
       ]
      },
-     "createdAt": "2026-09-13T11:41:03.424Z"
+     "createdAt": "2026-09-13T13:15:52.119Z"
     },
     {
-     "seq": 15,
+     "seq": 19,
      "kind": "contract",
      "label": "golden sample captured. required: reference, name, email, seats",
      "detail": {
@@ -228,24 +276,24 @@
        "seats": "seats"
       }
      },
-     "createdAt": "2026-09-13T11:41:03.460Z"
+     "createdAt": "2026-09-13T13:15:52.143Z"
     },
     {
-     "seq": 16,
+     "seq": 20,
      "kind": "done",
      "label": "run succeeded",
      "detail": {
       "status": "succeeded",
       "failureKind": null
      },
-     "createdAt": "2026-09-13T11:41:03.461Z"
+     "createdAt": "2026-09-13T13:15:52.144Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzqt3pq0001kfjrzz07diwf",
+     "id": "cmtzu6wrt00027hjr9jpzrjgf",
      "capabilityId": "reserve-room",
-     "planId": "cmtzqt1s40000kfjrz8s6um2c",
+     "planId": "cmtzu6urt00017hjrga9vjnjj",
      "inputs": {
       "name": "Priya Raman",
       "email": "priya.raman@example.com",
@@ -255,7 +303,7 @@
      "result": {
       "records": [
        {
-        "reference": "HL-6A4F5F",
+        "reference": "HL-8E89CB",
         "name": "Priya Raman",
         "email": "priya.raman@example.com",
         "seats": 3
@@ -263,12 +311,13 @@
       ]
      },
      "failureKind": null,
-     "startedAt": "2026-09-13T11:40:42.698Z",
-     "endedAt": "2026-09-13T11:41:03.471Z",
-     "createdAt": "2026-09-13T11:40:41.870Z"
+     "startedAt": "2026-09-13T13:15:25.680Z",
+     "endedAt": "2026-09-13T13:15:52.145Z",
+     "createdAt": "2026-09-13T13:15:24.905Z"
     },
     "capability": {
      "name": "Reserve a study room",
+     "engine": "browser",
      "plan": {
       "version": 1,
       "origin": "hand-written",
@@ -328,7 +377,7 @@
   },
   {
    "type": "run",
-   "note": "Then the demo site was changed: bookings now go through a \"check your details\" page with its own confirm button. Same plan, same kind of run:",
+   "note": "Then the demo site was changed: a visitor typed their own change: the email box became \"Where should we write?\" and the button \"Grab my room\". Same plan, same kind of run:",
    "subtitle": "plan v1",
    "trace": [
     {
@@ -342,18 +391,18 @@
        "seats": 5
       }
      },
-     "createdAt": "2026-09-13T11:41:07.997Z"
+     "createdAt": "2026-09-13T13:16:02.227Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v1",
      "detail": {
-      "planId": "cmtzqt1s40000kfjrz8s6um2c",
+      "planId": "cmtzu6urt00017hjrga9vjnjj",
       "version": 1,
       "try": 1
      },
-     "createdAt": "2026-09-13T11:41:08.507Z"
+     "createdAt": "2026-09-13T13:16:03.184Z"
     },
     {
      "seq": 3,
@@ -363,7 +412,7 @@
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T11:41:12.306Z"
+     "createdAt": "2026-09-13T13:16:07.342Z"
     },
     {
      "seq": 4,
@@ -376,10 +425,22 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T11:41:12.807Z"
+     "createdAt": "2026-09-13T13:16:07.821Z"
     },
     {
      "seq": 5,
+     "kind": "shot",
+     "label": "page after step 1",
+     "detail": {
+      "src": "/api/demo/shots/mtzu7vxz-834ee608.jpg",
+      "index": 0,
+      "kind": "navigate",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:16:10.489Z"
+    },
+    {
+     "seq": 6,
      "kind": "step",
      "label": "2. fill input[name=\"full_name\"]",
      "detail": {
@@ -390,10 +451,22 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T11:41:14.057Z"
+     "createdAt": "2026-09-13T13:16:10.491Z"
     },
     {
-     "seq": 6,
+     "seq": 7,
+     "kind": "shot",
+     "label": "page after step 2",
+     "detail": {
+      "src": "/api/demo/shots/mtzu7ypp-a108cff2.jpg",
+      "index": 1,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:16:14.079Z"
+    },
+    {
+     "seq": 8,
      "kind": "step",
      "label": "3. fill input[name=\"email\"]",
      "detail": {
@@ -404,146 +477,120 @@
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T11:41:16.200Z"
-    },
-    {
-     "seq": 7,
-     "kind": "step",
-     "label": "4. fill input[name=\"seats\"]",
-     "detail": {
-      "index": 3,
-      "step": {
-       "kind": "fill",
-       "selector": "input[name=\"seats\"]",
-       "value": "{{seats}}"
-      }
-     },
-     "createdAt": "2026-09-13T11:41:17.374Z"
-    },
-    {
-     "seq": 8,
-     "kind": "step",
-     "label": "5. submit #reserve-form button[type=\"submit\"]",
-     "detail": {
-      "index": 4,
-      "step": {
-       "kind": "submit",
-       "selector": "#reserve-form button[type=\"submit\"]"
-      }
-     },
-     "createdAt": "2026-09-13T11:41:18.548Z"
+     "createdAt": "2026-09-13T13:16:14.081Z"
     },
     {
      "seq": 9,
      "kind": "shot",
-     "label": "page before step 5",
+     "label": "page where it got stuck",
      "detail": {
-      "src": "/api/demo/shots/mtzqtx3z-6ef241f7.jpg",
-      "index": 4,
-      "kind": "submit"
+      "src": "/api/demo/shots/mtzu849z-050595b7.jpg",
+      "index": 2,
+      "stuck": true
      },
-     "createdAt": "2026-09-13T11:41:19.969Z"
+     "createdAt": "2026-09-13T13:16:21.291Z"
     },
     {
      "seq": 10,
-     "kind": "step",
-     "label": "6. assert #reference",
+     "kind": "browser",
+     "label": "closed session after 14.4s",
      "detail": {
-      "index": 5,
-      "step": {
-       "kind": "assert",
-       "selector": "#reference"
-      }
+      "ms": 14430
      },
-     "createdAt": "2026-09-13T11:41:22.612Z"
+     "createdAt": "2026-09-13T13:16:22.254Z"
     },
     {
      "seq": 11,
-     "kind": "shot",
-     "label": "page where it got stuck",
-     "detail": {
-      "src": "/api/demo/shots/mtzqu4pf-3a4937f6.jpg",
-      "index": 5,
-      "stuck": true
-     },
-     "createdAt": "2026-09-13T11:41:29.813Z"
-    },
-    {
-     "seq": 12,
-     "kind": "browser",
-     "label": "closed session after 18.0s",
-     "detail": {
-      "ms": 17953
-     },
-     "createdAt": "2026-09-13T11:41:30.761Z"
-    },
-    {
-     "seq": 13,
      "kind": "error",
-     "label": "step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
+     "label": "step 3 (fill input[name=\"email\"]) failed: page.fill: Timeout 6000ms exceeded.",
      "detail": {
       "reason": "selector-missing",
-      "step": 5,
-      "url": "https://harbor-lane.anvil.test/reserve/review?t=444d2be538b21ea7",
+      "step": 2,
+      "url": "https://harbor-lane.anvil.test/",
       "docStatus": 200,
       "pageAtFailure": {
-       "title": "Check your details · Harbor Lane Library",
+       "title": "Reserve a study room · Harbor Lane Library",
        "headings": [
-        "Check your details"
+        "Reserve a study room"
        ],
        "forms": [
         {
-         "id": "confirm-form",
-         "action": "/reserve/confirm",
+         "id": "reserve-form",
+         "action": "/reserve",
          "method": "post",
-         "fields": [],
+         "fields": [
+          {
+           "tag": "input",
+           "type": "text",
+           "name": "full_name",
+           "id": "full_name",
+           "label": "Full name",
+           "required": true
+          },
+          {
+           "tag": "input",
+           "type": "email",
+           "name": "where_should_we_write",
+           "id": "where_should_we_write",
+           "label": "Where should we write?",
+           "required": true
+          },
+          {
+           "tag": "input",
+           "type": "number",
+           "name": "seats",
+           "id": "seats",
+           "label": "Seats",
+           "required": true
+          }
+         ],
          "buttons": [
           {
            "type": "submit",
-           "text": "Confirm reservation"
+           "text": "Grab my room"
           }
          ]
         }
        ]
       }
      },
-     "createdAt": "2026-09-13T11:41:30.763Z"
+     "createdAt": "2026-09-13T13:16:22.256Z"
     },
     {
-     "seq": 14,
+     "seq": 12,
      "kind": "triage",
-     "label": "structural: page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
+     "label": "structural: page rendered fine but step 3 (fill input[name=\"email\"]) failed: page.fill: Timeout 6000ms exceeded.",
      "detail": {
       "kind": "structural",
       "canaryPresent": true
      },
-     "createdAt": "2026-09-13T11:41:30.763Z"
+     "createdAt": "2026-09-13T13:16:22.257Z"
     },
     {
-     "seq": 15,
+     "seq": 13,
      "kind": "repair",
      "label": "structural failure, queued a repair",
      "detail": {
-      "repairId": "cmtzqu5g70001ksjrjnqu0gkx"
+      "repairId": "cmtzu851c00017pjrupjxvupc"
      },
-     "createdAt": "2026-09-13T11:41:30.783Z"
+     "createdAt": "2026-09-13T13:16:22.290Z"
     },
     {
-     "seq": 16,
+     "seq": 14,
      "kind": "done",
      "label": "run failed (structural)",
      "detail": {
       "status": "failed",
       "failureKind": "structural"
      },
-     "createdAt": "2026-09-13T11:41:30.784Z"
+     "createdAt": "2026-09-13T13:16:22.292Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzqtnvf0003kfjro2l24cyl",
+     "id": "cmtzu7pkg00047hjrzwkyx9xh",
      "capabilityId": "reserve-room",
-     "planId": "cmtzqt1s40000kfjrz8s6um2c",
+     "planId": "cmtzu6urt00017hjrga9vjnjj",
      "inputs": {
       "name": "Tomas Ortega",
       "email": "tomas.ortega@example.com",
@@ -552,16 +599,17 @@
      "status": "failed",
      "result": {
       "records": [],
-      "why": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded.",
-      "repairId": "cmtzqu5g70001ksjrjnqu0gkx"
+      "why": "page rendered fine but step 3 (fill input[name=\"email\"]) failed: page.fill: Timeout 6000ms exceeded.",
+      "repairId": "cmtzu851c00017pjrupjxvupc"
      },
      "failureKind": "structural",
-     "startedAt": "2026-09-13T11:41:08.505Z",
-     "endedAt": "2026-09-13T11:41:30.785Z",
-     "createdAt": "2026-09-13T11:41:07.995Z"
+     "startedAt": "2026-09-13T13:16:03.182Z",
+     "endedAt": "2026-09-13T13:16:22.292Z",
+     "createdAt": "2026-09-13T13:16:02.224Z"
     },
     "capability": {
      "name": "Reserve a study room",
+     "engine": "browser",
      "plan": {
       "version": 1,
       "origin": "hand-written",
@@ -629,19 +677,19 @@
      "label": "repair queued (run-failure)",
      "detail": {
       "trigger": "run-failure",
-      "runId": "cmtzqtnvf0003kfjro2l24cyl"
+      "runId": "cmtzu7pkg00047hjrzwkyx9xh"
      },
-     "createdAt": "2026-09-13T11:41:30.780Z"
+     "createdAt": "2026-09-13T13:16:22.287Z"
     },
     {
      "seq": 2,
      "kind": "repair",
      "label": "repair started (run-failure), setting plan v1 aside",
      "detail": {
-      "fromPlanId": "cmtzqt1s40000kfjrz8s6um2c",
-      "failure": "page rendered fine but step 6 (assert #reference) failed: page.waitForSelector: Timeout 6000ms exceeded."
+      "fromPlanId": "cmtzu6urt00017hjrga9vjnjj",
+      "failure": "page rendered fine but step 3 (fill input[name=\"email\"]) failed: page.fill: Timeout 6000ms exceeded."
      },
-     "createdAt": "2026-09-13T11:41:30.810Z"
+     "createdAt": "2026-09-13T13:16:22.347Z"
     },
     {
      "seq": 3,
@@ -650,7 +698,7 @@
      "detail": {
       "status": "repairing"
      },
-     "createdAt": "2026-09-13T11:41:30.812Z"
+     "createdAt": "2026-09-13T13:16:22.349Z"
     },
     {
      "seq": 4,
@@ -659,7 +707,7 @@
      "detail": {
       "attempt": 1
      },
-     "createdAt": "2026-09-13T11:41:30.812Z"
+     "createdAt": "2026-09-13T13:16:22.354Z"
     },
     {
      "seq": 5,
@@ -669,7 +717,7 @@
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T11:41:34.660Z"
+     "createdAt": "2026-09-13T13:16:26.069Z"
     },
     {
      "seq": 6,
@@ -677,39 +725,46 @@
      "label": "re-read the live page via browser session (target not public yet)",
      "detail": {
       "before": "8adb2fdfc7498992",
-      "after": "8adb2fdfc7498992"
+      "after": "71be6c130a8733a9"
      },
-     "createdAt": "2026-09-13T11:41:36.181Z"
+     "createdAt": "2026-09-13T13:16:27.571Z"
     },
     {
      "seq": 7,
      "kind": "diff",
-     "label": "no structural change detected on the entry page",
+     "label": "form #reserve-form: field \"email\" (label \"Email\") is gone; an email field \"where_should_we_write\" (label \"Where should we write?\") sits in the same position, likely a rename",
      "detail": null,
-     "createdAt": "2026-09-13T11:41:36.185Z"
+     "createdAt": "2026-09-13T13:16:27.572Z"
     },
     {
      "seq": 8,
-     "kind": "derive",
-     "label": "skipped model openrouter key 1: out of free requests for today",
+     "kind": "diff",
+     "label": "form #reserve-form: buttons changed from \"Reserve room\" to \"Grab my room\"",
      "detail": null,
-     "createdAt": "2026-09-13T11:42:18.291Z"
+     "createdAt": "2026-09-13T13:16:27.573Z"
     },
     {
      "seq": 9,
      "kind": "derive",
-     "label": "new plan from nex-agi/nex-n2.5-pro:free in 42.0s",
-     "detail": {
-      "model": "nex-agi/nex-n2.5-pro:free",
-      "ms": 41972,
-      "promptChars": 3070
-     },
-     "createdAt": "2026-09-13T11:42:18.292Z"
+     "label": "skipped model openrouter key 1: out of free requests for today",
+     "detail": null,
+     "createdAt": "2026-09-13T13:16:50.144Z"
     },
     {
      "seq": 10,
+     "kind": "derive",
+     "label": "new plan from nex-agi/nex-n2.5-pro:free in 22.4s",
+     "detail": {
+      "model": "nex-agi/nex-n2.5-pro:free",
+      "ms": 22405,
+      "promptChars": 3466
+     },
+     "createdAt": "2026-09-13T13:16:50.145Z"
+    },
+    {
+     "seq": 11,
      "kind": "plan",
-     "label": "candidate plan has 9 steps",
+     "label": "candidate plan has 7 steps",
      "detail": {
       "steps": [
        {
@@ -723,7 +778,7 @@
        },
        {
         "kind": "fill",
-        "selector": "input[name=\"email\"]",
+        "selector": "input[name=\"where_should_we_write\"]",
         "value": "{{email}}"
        },
        {
@@ -734,14 +789,6 @@
        {
         "kind": "submit",
         "selector": "#reserve-form button[type=\"submit\"]"
-       },
-       {
-        "kind": "assert",
-        "selector": "#confirm-form"
-       },
-       {
-        "kind": "submit",
-        "selector": "#confirm-form button"
        },
        {
         "kind": "assert",
@@ -770,10 +817,10 @@
        }
       ]
      },
-     "createdAt": "2026-09-13T11:42:18.293Z"
+     "createdAt": "2026-09-13T13:16:50.146Z"
     },
     {
-     "seq": 11,
+     "seq": 12,
      "kind": "step",
      "label": "1. navigate /",
      "detail": {
@@ -783,10 +830,22 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T11:42:18.294Z"
+     "createdAt": "2026-09-13T13:16:50.147Z"
     },
     {
-     "seq": 12,
+     "seq": 13,
+     "kind": "shot",
+     "label": "page after step 1",
+     "detail": {
+      "src": "/api/demo/shots/mtzu8s8p-9fa73828.jpg",
+      "index": 0,
+      "kind": "navigate",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:16:52.348Z"
+    },
+    {
+     "seq": 14,
      "kind": "step",
      "label": "2. fill input[name=\"full_name\"]",
      "detail": {
@@ -797,24 +856,48 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:19.325Z"
+     "createdAt": "2026-09-13T13:16:52.349Z"
     },
     {
-     "seq": 13,
+     "seq": 15,
+     "kind": "shot",
+     "label": "page after step 2",
+     "detail": {
+      "src": "/api/demo/shots/mtzu8ut2-02ec2973.jpg",
+      "index": 1,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:16:55.673Z"
+    },
+    {
+     "seq": 16,
      "kind": "step",
-     "label": "3. fill input[name=\"email\"]",
+     "label": "3. fill input[name=\"where_should_we_write\"]",
      "detail": {
       "index": 2,
       "step": {
        "kind": "fill",
-       "selector": "input[name=\"email\"]",
+       "selector": "input[name=\"where_should_we_write\"]",
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:21.527Z"
+     "createdAt": "2026-09-13T13:16:55.675Z"
     },
     {
-     "seq": 14,
+     "seq": 17,
+     "kind": "shot",
+     "label": "page after step 3",
+     "detail": {
+      "src": "/api/demo/shots/mtzu8wmj-3d66b013.jpg",
+      "index": 2,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:16:58.031Z"
+    },
+    {
+     "seq": 18,
      "kind": "step",
      "label": "4. fill input[name=\"seats\"]",
      "detail": {
@@ -825,10 +908,22 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:22.731Z"
+     "createdAt": "2026-09-13T13:16:58.033Z"
     },
     {
-     "seq": 15,
+     "seq": 19,
+     "kind": "shot",
+     "label": "page after step 4",
+     "detail": {
+      "src": "/api/demo/shots/mtzu8yiw-1b55f33b.jpg",
+      "index": 3,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:17:00.491Z"
+    },
+    {
+     "seq": 20,
      "kind": "step",
      "label": "5. submit #reserve-form button[type=\"submit\"]",
      "detail": {
@@ -838,75 +933,38 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T11:42:23.933Z"
+     "createdAt": "2026-09-13T13:17:00.493Z"
     },
     {
-     "seq": 16,
+     "seq": 21,
      "kind": "shot",
      "label": "page before step 5",
      "detail": {
-      "src": "/api/demo/shots/mtzqvbem-30b2832b.jpg",
+      "src": "/api/demo/shots/mtzu8zfz-fd232b3d.jpg",
       "index": 4,
       "kind": "submit"
      },
-     "createdAt": "2026-09-13T11:42:25.153Z"
+     "createdAt": "2026-09-13T13:17:01.683Z"
     },
     {
-     "seq": 17,
+     "seq": 22,
      "kind": "step",
-     "label": "6. assert #confirm-form",
+     "label": "6. assert #reference",
      "detail": {
       "index": 5,
-      "step": {
-       "kind": "assert",
-       "selector": "#confirm-form"
-      }
-     },
-     "createdAt": "2026-09-13T11:42:27.759Z"
-    },
-    {
-     "seq": 18,
-     "kind": "step",
-     "label": "7. submit #confirm-form button",
-     "detail": {
-      "index": 6,
-      "step": {
-       "kind": "submit",
-       "selector": "#confirm-form button"
-      }
-     },
-     "createdAt": "2026-09-13T11:42:30.793Z"
-    },
-    {
-     "seq": 19,
-     "kind": "shot",
-     "label": "page before step 7",
-     "detail": {
-      "src": "/api/demo/shots/mtzqvgrh-8fe283a6.jpg",
-      "index": 6,
-      "kind": "submit"
-     },
-     "createdAt": "2026-09-13T11:42:32.096Z"
-    },
-    {
-     "seq": 20,
-     "kind": "step",
-     "label": "8. assert #reference",
-     "detail": {
-      "index": 7,
       "step": {
        "kind": "assert",
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T11:42:34.700Z"
+     "createdAt": "2026-09-13T13:17:04.249Z"
     },
     {
-     "seq": 21,
+     "seq": 23,
      "kind": "step",
-     "label": "9. extract reference, name, email, seats",
+     "label": "7. extract reference, name, email, seats",
      "detail": {
-      "index": 8,
+      "index": 6,
       "step": {
        "kind": "extract",
        "fields": {
@@ -929,27 +987,27 @@
        }
       }
      },
-     "createdAt": "2026-09-13T11:42:37.736Z"
+     "createdAt": "2026-09-13T13:17:07.211Z"
     },
     {
-     "seq": 22,
+     "seq": 24,
      "kind": "shot",
-     "label": "page before step 9",
+     "label": "page before step 7",
      "detail": {
-      "src": "/api/demo/shots/mtzqvm3n-dafe3350.jpg",
-      "index": 8,
+      "src": "/api/demo/shots/mtzu94nv-cceb6797.jpg",
+      "index": 6,
       "kind": "extract"
      },
-     "createdAt": "2026-09-13T11:42:39.012Z"
+     "createdAt": "2026-09-13T13:17:08.446Z"
     },
     {
-     "seq": 23,
+     "seq": 25,
      "kind": "validate",
      "label": "contract passed",
      "detail": {
       "records": [
        {
-        "reference": "HL-E09C57",
+        "reference": "HL-0E232F",
         "name": "Tomas Ortega",
         "email": "tomas.ortega@example.com",
         "seats": 5
@@ -957,29 +1015,29 @@
       ],
       "problems": []
      },
-     "createdAt": "2026-09-13T11:42:41.186Z"
+     "createdAt": "2026-09-13T13:17:10.563Z"
     },
     {
-     "seq": 24,
+     "seq": 26,
      "kind": "promote",
      "label": "plan v2 promoted, capability healthy",
      "detail": {
-      "planId": "cmtzqvnsg0003ksjrw3yucz8g",
+      "planId": "cmtzu96b300037pjrk4n2kpmm",
       "version": 2
      },
-     "createdAt": "2026-09-13T11:42:41.209Z"
+     "createdAt": "2026-09-13T13:17:10.582Z"
     }
    ],
    "final": {
     "repair": {
-     "id": "cmtzqu5g70001ksjrjnqu0gkx",
+     "id": "cmtzu851c00017pjrupjxvupc",
      "capabilityId": "reserve-room",
-     "fromPlanId": "cmtzqt1s40000kfjrz8s6um2c",
-     "toPlanId": "cmtzqvnsg0003ksjrw3yucz8g",
+     "fromPlanId": "cmtzu6urt00017hjrga9vjnjj",
+     "toPlanId": "cmtzu96b300037pjrk4n2kpmm",
      "trigger": "run-failure",
      "outcome": "repaired",
-     "diagnosis": "no structural change detected on the entry page",
-     "createdAt": "2026-09-13T11:41:30.775Z"
+     "diagnosis": "form #reserve-form: field \"email\" (label \"Email\") is gone; an email field \"where_should_we_write\" (label \"Where should we write?\") sits in the same position, likely a rename; form #reserve-form: buttons changed from \"Reserve room\" to \"Grab my room\"",
+     "createdAt": "2026-09-13T13:16:22.272Z"
     },
     "capability": {
      "name": "Reserve a study room",
@@ -998,7 +1056,7 @@
        },
        {
         "kind": "fill",
-        "selector": "input[name=\"email\"]",
+        "selector": "input[name=\"where_should_we_write\"]",
         "value": "{{email}}"
        },
        {
@@ -1009,14 +1067,6 @@
        {
         "kind": "submit",
         "selector": "#reserve-form button[type=\"submit\"]"
-       },
-       {
-        "kind": "assert",
-        "selector": "#confirm-form"
-       },
-       {
-        "kind": "submit",
-        "selector": "#confirm-form button"
        },
        {
         "kind": "assert",
@@ -1115,7 +1165,7 @@
       },
       {
        "kind": "fill",
-       "selector": "input[name=\"email\"]",
+       "selector": "input[name=\"where_should_we_write\"]",
        "value": "{{email}}"
       },
       {
@@ -1126,14 +1176,6 @@
       {
        "kind": "submit",
        "selector": "#reserve-form button[type=\"submit\"]"
-      },
-      {
-       "kind": "assert",
-       "selector": "#confirm-form"
-      },
-      {
-       "kind": "submit",
-       "selector": "#confirm-form button"
       },
       {
        "kind": "assert",
@@ -1161,6 +1203,10 @@
        }
       }
      ]
+    },
+    "compare": {
+     "before": "/api/demo/shots/mtzu77ap-86ecc66c.jpg",
+     "after": "/api/demo/shots/mtzu849z-050595b7.jpg"
     }
    }
   },
@@ -1180,18 +1226,18 @@
        "seats": 2
       }
      },
-     "createdAt": "2026-09-13T11:42:44.352Z"
+     "createdAt": "2026-09-13T13:17:18.198Z"
     },
     {
      "seq": 2,
      "kind": "run",
      "label": "running plan v2",
      "detail": {
-      "planId": "cmtzqvnsg0003ksjrw3yucz8g",
+      "planId": "cmtzu96b300037pjrk4n2kpmm",
       "version": 2,
       "try": 1
      },
-     "createdAt": "2026-09-13T11:42:44.476Z"
+     "createdAt": "2026-09-13T13:17:18.851Z"
     },
     {
      "seq": 3,
@@ -1201,7 +1247,7 @@
       "call": "browser",
       "credits": 1
      },
-     "createdAt": "2026-09-13T11:42:48.366Z"
+     "createdAt": "2026-09-13T13:17:22.569Z"
     },
     {
      "seq": 4,
@@ -1214,10 +1260,22 @@
        "url": "/"
       }
      },
-     "createdAt": "2026-09-13T11:42:48.830Z"
+     "createdAt": "2026-09-13T13:17:23.040Z"
     },
     {
      "seq": 5,
+     "kind": "shot",
+     "label": "page after step 1",
+     "detail": {
+      "src": "/api/demo/shots/mtzu9hmh-758d5807.jpg",
+      "index": 0,
+      "kind": "navigate",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:17:25.244Z"
+    },
+    {
+     "seq": 6,
      "kind": "step",
      "label": "2. fill input[name=\"full_name\"]",
      "detail": {
@@ -1228,24 +1286,48 @@
        "value": "{{name}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:49.835Z"
+     "createdAt": "2026-09-13T13:17:25.245Z"
     },
     {
-     "seq": 6,
+     "seq": 7,
+     "kind": "shot",
+     "label": "page after step 2",
+     "detail": {
+      "src": "/api/demo/shots/mtzu9k6p-76cedff8.jpg",
+      "index": 1,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:17:28.563Z"
+    },
+    {
+     "seq": 8,
      "kind": "step",
-     "label": "3. fill input[name=\"email\"]",
+     "label": "3. fill input[name=\"where_should_we_write\"]",
      "detail": {
       "index": 2,
       "step": {
        "kind": "fill",
-       "selector": "input[name=\"email\"]",
+       "selector": "input[name=\"where_should_we_write\"]",
        "value": "{{email}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:51.929Z"
+     "createdAt": "2026-09-13T13:17:28.564Z"
     },
     {
-     "seq": 7,
+     "seq": 9,
+     "kind": "shot",
+     "label": "page after step 3",
+     "detail": {
+      "src": "/api/demo/shots/mtzu9lzq-695be7ce.jpg",
+      "index": 2,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:17:30.904Z"
+    },
+    {
+     "seq": 10,
      "kind": "step",
      "label": "4. fill input[name=\"seats\"]",
      "detail": {
@@ -1256,10 +1338,22 @@
        "value": "{{seats}}"
       }
      },
-     "createdAt": "2026-09-13T11:42:53.077Z"
+     "createdAt": "2026-09-13T13:17:30.905Z"
     },
     {
-     "seq": 8,
+     "seq": 11,
+     "kind": "shot",
+     "label": "page after step 4",
+     "detail": {
+      "src": "/api/demo/shots/mtzu9nsq-05c2f1d0.jpg",
+      "index": 3,
+      "kind": "fill",
+      "after": true
+     },
+     "createdAt": "2026-09-13T13:17:33.247Z"
+    },
+    {
+     "seq": 12,
      "kind": "step",
      "label": "5. submit #reserve-form button[type=\"submit\"]",
      "detail": {
@@ -1269,75 +1363,38 @@
        "selector": "#reserve-form button[type=\"submit\"]"
       }
      },
-     "createdAt": "2026-09-13T11:42:54.224Z"
-    },
-    {
-     "seq": 9,
-     "kind": "shot",
-     "label": "page before step 5",
-     "detail": {
-      "src": "/api/demo/shots/mtzqvyqm-1f9fe4ac.jpg",
-      "index": 4,
-      "kind": "submit"
-     },
-     "createdAt": "2026-09-13T11:42:55.394Z"
-    },
-    {
-     "seq": 10,
-     "kind": "step",
-     "label": "6. assert #confirm-form",
-     "detail": {
-      "index": 5,
-      "step": {
-       "kind": "assert",
-       "selector": "#confirm-form"
-      }
-     },
-     "createdAt": "2026-09-13T11:42:57.951Z"
-    },
-    {
-     "seq": 11,
-     "kind": "step",
-     "label": "7. submit #confirm-form button",
-     "detail": {
-      "index": 6,
-      "step": {
-       "kind": "submit",
-       "selector": "#confirm-form button"
-      }
-     },
-     "createdAt": "2026-09-13T11:43:00.880Z"
-    },
-    {
-     "seq": 12,
-     "kind": "shot",
-     "label": "page before step 7",
-     "detail": {
-      "src": "/api/demo/shots/mtzqw3ws-049a38c1.jpg",
-      "index": 6,
-      "kind": "submit"
-     },
-     "createdAt": "2026-09-13T11:43:02.095Z"
+     "createdAt": "2026-09-13T13:17:33.249Z"
     },
     {
      "seq": 13,
-     "kind": "step",
-     "label": "8. assert #reference",
+     "kind": "shot",
+     "label": "page before step 5",
      "detail": {
-      "index": 7,
+      "src": "/api/demo/shots/mtzu9opi-73ef3164.jpg",
+      "index": 4,
+      "kind": "submit"
+     },
+     "createdAt": "2026-09-13T13:17:34.427Z"
+    },
+    {
+     "seq": 14,
+     "kind": "step",
+     "label": "6. assert #reference",
+     "detail": {
+      "index": 5,
       "step": {
        "kind": "assert",
        "selector": "#reference"
       }
      },
-     "createdAt": "2026-09-13T11:43:04.641Z"
+     "createdAt": "2026-09-13T13:17:36.976Z"
     },
     {
-     "seq": 14,
+     "seq": 15,
      "kind": "step",
-     "label": "9. extract reference, name, email, seats",
+     "label": "7. extract reference, name, email, seats",
      "detail": {
-      "index": 8,
+      "index": 6,
       "step": {
        "kind": "extract",
        "fields": {
@@ -1360,69 +1417,69 @@
        }
       }
      },
-     "createdAt": "2026-09-13T11:43:07.565Z"
-    },
-    {
-     "seq": 15,
-     "kind": "shot",
-     "label": "page before step 9",
-     "detail": {
-      "src": "/api/demo/shots/mtzqw92q-719544e5.jpg",
-      "index": 8,
-      "kind": "extract"
-     },
-     "createdAt": "2026-09-13T11:43:08.789Z"
+     "createdAt": "2026-09-13T13:17:39.894Z"
     },
     {
      "seq": 16,
-     "kind": "browser",
-     "label": "closed session after 22.5s",
+     "kind": "shot",
+     "label": "page before step 7",
      "detail": {
-      "ms": 22506
+      "src": "/api/demo/shots/mtzu9tvb-a8bbffbe.jpg",
+      "index": 6,
+      "kind": "extract"
      },
-     "createdAt": "2026-09-13T11:43:11.337Z"
+     "createdAt": "2026-09-13T13:17:41.113Z"
     },
     {
      "seq": 17,
+     "kind": "browser",
+     "label": "closed session after 20.6s",
+     "detail": {
+      "ms": 20647
+     },
+     "createdAt": "2026-09-13T13:17:43.687Z"
+    },
+    {
+     "seq": 18,
      "kind": "result",
      "label": "extracted 1 record",
      "detail": {
       "records": [
        {
-        "reference": "HL-2EA9E5",
+        "reference": "HL-7D8E42",
         "name": "Amara Okafor",
         "email": "amara.okafor@example.com",
         "seats": 2
        }
       ]
      },
-     "createdAt": "2026-09-13T11:43:11.339Z"
+     "createdAt": "2026-09-13T13:17:43.688Z"
     },
     {
-     "seq": 18,
+     "seq": 19,
      "kind": "contract",
      "label": "contract passed",
      "detail": {
       "problems": []
      },
-     "createdAt": "2026-09-13T11:43:11.340Z"
+     "createdAt": "2026-09-13T13:17:43.689Z"
     },
     {
-     "seq": 19,
+     "seq": 20,
      "kind": "done",
      "label": "run succeeded",
      "detail": {
       "status": "succeeded",
       "failureKind": null
      },
-     "createdAt": "2026-09-13T11:43:11.341Z"
+     "createdAt": "2026-09-13T13:17:43.689Z"
     }
    ],
    "final": {
     "run": {
-     "id": "cmtzqvq7x0005kfjrrzhieem6",
+     "id": "cmtzu9c6n00067hjresi81ntd",
      "capabilityId": "reserve-room",
-     "planId": "cmtzqvnsg0003ksjrw3yucz8g",
+     "planId": "cmtzu96b300037pjrk4n2kpmm",
      "inputs": {
       "name": "Amara Okafor",
       "email": "amara.okafor@example.com",
@@ -1432,7 +1489,7 @@
      "result": {
       "records": [
        {
-        "reference": "HL-2EA9E5",
+        "reference": "HL-7D8E42",
         "name": "Amara Okafor",
         "email": "amara.okafor@example.com",
         "seats": 2
@@ -1440,12 +1497,13 @@
       ]
      },
      "failureKind": null,
-     "startedAt": "2026-09-13T11:42:44.472Z",
-     "endedAt": "2026-09-13T11:43:11.342Z",
-     "createdAt": "2026-09-13T11:42:44.349Z"
+     "startedAt": "2026-09-13T13:17:18.849Z",
+     "endedAt": "2026-09-13T13:17:43.690Z",
+     "createdAt": "2026-09-13T13:17:18.191Z"
     },
     "capability": {
      "name": "Reserve a study room",
+     "engine": "browser",
      "plan": {
       "version": 2,
       "origin": "repair (nex-agi/nex-n2.5-pro:free)",
@@ -1461,7 +1519,7 @@
        },
        {
         "kind": "fill",
-        "selector": "input[name=\"email\"]",
+        "selector": "input[name=\"where_should_we_write\"]",
         "value": "{{email}}"
        },
        {
@@ -1472,14 +1530,6 @@
        {
         "kind": "submit",
         "selector": "#reserve-form button[type=\"submit\"]"
-       },
-       {
-        "kind": "assert",
-        "selector": "#confirm-form"
-       },
-       {
-        "kind": "submit",
-        "selector": "#confirm-form button"
        },
        {
         "kind": "assert",

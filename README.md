@@ -2,11 +2,13 @@
 
 An agent that operates websites, and when a site changes under it, throws its plan away, works out a new one from the live page, and keeps it only if the result still passes the contract it learned the first time.
 
-**Try it: https://attirebytatsavi.com** — no key, no sign-up, no install.
+**Try it: https://anvil.kgbnetwork.com** — no key, no sign-up, no install. (The same app also answers at https://attirebytatsavi.com, where the Website Monitoring demo below was set up.)
 
 1. Press **Send Anvil to book it**. Anvil books a real room on the demo site through a remote browser and reads back the confirmation. The page shows each step in plain words, with screenshots of what the remote browser actually saw.
-2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick one of four specific breaks: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page.
-3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, checks it against the contract, promotes it, and the same booking goes through.
+2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick one of four specific breaks: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page. Or **change it your way**: type a new label for any box (its name follows the label), new button text, or a new order, so the change is one nobody could have prepared for.
+3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, checks it against the contract, promotes it, and the same booking goes through. The repair opens with two screenshots side by side: what the last good booking saw at the step that broke, and what the broken one saw there instead.
+
+The demo is shared, so everyone with the page open sees every booking, change and repair as it happens, marked when it is someone else's. Below the demo, the same page reads real websites (Hacker News through a Wire action, quotes.toscrape.com through a derived plan) with one click, and can be taught a new one.
 
 Everything shows up in order, in plain words first (what changed on the site, the new steps, the check the booking passed) with the code, selectors and raw trace one click away. The demo site belongs to this project. That is on purpose: you cannot show an agent surviving a site change on a site you are not allowed to change.
 
@@ -129,6 +131,7 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **Stacked surprise repairs**: a surprise that renamed the email field and the confirmation ids was repaired in two attempts and the next booking succeeded; a second surprise on top (new form id, new button text, new confirmation ids) failed on its first attempt, was repaired on its second with the confirmation page from the first attempt in the prompt, and the next booking read back the right reference, name, email and seats. The first version of this test degraded, which is what led to attempts keeping every page and rejection.
 - **Dropped connections**: reproduced with a local Chrome behind a relay that stops forwarding without closing. The code before the deadlines was still stuck after three minutes; with them the run was retried in a fresh session after 11 seconds and finished.
 - **The page, end to end** in a headless browser: book, rename the email field, book (fails, structural), repair promoted, book again, with screenshots from the remote browser at each press and at the failure, and no console errors.
+- **Two visitors on the deployed site at once**: one booked, typed their own change (email box renamed to "Where should we write?", button to "Grab my room"), booked (failed), watched the repair promote v2 in 52 seconds on a free model with the before/after pictures, and booked again; the other visitor pressed nothing and saw all four cards live, marked as another visitor's, plus the note that the site had been changed.
 
 ## Limitations
 
@@ -140,7 +143,8 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **A step can time out on a page that did not change.** Seen twice in testing, cause unknown. It is triaged as structural and triggers a repair that was not needed. The page structure at failure is stored to diagnose it.
 - **The credit cap is an estimate** from published prices, and a browser session that runs past two minutes can overshoot it by a credit. Screenshots from the scraper are sometimes missing.
 - **Booking steps are not undone.** A repair attempt runs its candidate plan for real, so an attempt that books a room and then fails the contract (for example, it could not read the new confirmation page) still leaves that booking on the demo site. A real site would need a cancel step or a sandbox account for repair attempts.
-- **One shared demo.** One worker does one job at a time, everyone sees the same demo site, and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
+- **One shared demo.** One worker does one job at a time, everyone sees the same demo site (and each other's bookings and repairs), and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
+- **Doing things is only shown on the demo site.** The browser plans work on any site, but the booking's first plan was written by hand and Anvil repairs it from there; it does not yet derive a new write capability from a sentence. Deriving from a sentence is shown for reading, on real sites.
 - **The monitor checks every four hours** to keep credits down. The proactive demo above used an on-demand check.
 - **Crawl's `includePatterns` only filter the first few links it discovers,** so Anvil starts crawls at the page it wants instead.
 

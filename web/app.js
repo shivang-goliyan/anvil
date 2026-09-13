@@ -450,7 +450,24 @@ function runView(card, capability) {
         } else {
           card.body.prepend(recordsView(records));
         }
-        if (mine && !booking) toast(`Read ${records.length} record${records.length === 1 ? '' : 's'}`, 'good', card.node, `Live from ${capability?.targetUrl ? new URL(capability.targetUrl).hostname : 'the website'}.`);
+        if (mine && !booking) {
+          toast(`Read ${records.length} record${records.length === 1 ? '' : 's'}`, 'good', card.node, `Live from ${capability?.targetUrl ? new URL(capability.targetUrl).hostname : 'the website'}.`);
+          card.next.append(
+            h('button', {
+              type: 'button',
+              class: 'btn outline',
+              text: '↑ Back to the booking demo',
+              onclick: async () => {
+                const demo = capabilities.find((c) => c.engine === 'browser');
+                if (!demo) return;
+                await refreshCapabilities(demo.id);
+                renderComposer(current());
+                loadTarget();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              },
+            }),
+          );
+        }
         if (mine && booking) {
           afterRun(true, false);
           if (rec?.reference) toast(`Booked · ${rec.reference}`, 'good', card.node, story.again ? 'The new steps worked on the changed website.' : 'Read straight off the confirmation page.');
