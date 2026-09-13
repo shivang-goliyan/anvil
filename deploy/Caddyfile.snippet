@@ -1,5 +1,20 @@
 # Anvil. The app sends Cache-Control: no-store on everything, which Cloudflare honours.
 attirebytatsavi.com, www.attirebytatsavi.com {
 	encode gzip
-	reverse_proxy 127.0.0.1:3310
+
+	# read-only view of the demo site, so Anakin Website Monitoring has a public page to watch
+	handle_path /harbor-lane/* {
+		@readonly {
+			method GET HEAD
+			not path /_admin*
+		}
+		handle @readonly {
+			reverse_proxy 127.0.0.1:4310
+		}
+		respond "The demo site is read-only here. Anvil books rooms on it through its own private connection." 405
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3310
+	}
 }

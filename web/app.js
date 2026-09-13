@@ -305,6 +305,15 @@ async function loadTarget() {
     return;
   }
   $('owned').textContent = json.owned;
+  $('monitor').hidden = !json.monitor;
+  if (json.monitor) {
+    const hours = json.monitor.everyMinutes / 60;
+    $('monitor').replaceChildren(
+      document.createTextNode(`Anakin Website Monitoring checks `),
+      el('a', { href: json.monitor.page, target: '_blank', rel: 'noopener', text: 'the page' }),
+      document.createTextNode(` every ${hours >= 1 ? `${hours} hour${hours === 1 ? '' : 's'}` : `${json.monitor.everyMinutes} minutes`}. When it sees a change it calls Anvil, and a repair starts before any run has failed. It shows up in the trace on its own.`),
+    );
+  }
   $('pages').replaceChildren(...json.pages.map((p) => el('li', { text: p })));
   const applied = new Set(json.breaks.map((b) => b.kind));
   const busy = !!json.busy;
@@ -346,9 +355,23 @@ $('read-form').addEventListener('submit', async (e) => {
   }
 });
 
+// Repairs nobody here asked for: the site monitor's webhook starts them. Follow those too.
+let seenSince = Date.now();
+async function watchActivity() {
+  const { status, json } = await api('GET', `/api/activity?since=${seenSince}`);
+  if (status !== 200) return;
+  seenSince = json.now;
+  for (const r of json.repairs) {
+    if (r.trigger !== 'monitor' || following.has(`repair:${r.id}`)) continue;
+    addToTrace(el('p', { class: 'banner', text: 'Anakin Website Monitoring noticed the demo site changed and called Anvil. No run has failed, and nobody pressed anything. Repairing now:' }));
+    follow('repair', r.id);
+  }
+}
+
 await refreshCapabilities();
 renderInputs(current());
 await loadTarget();
+setInterval(watchActivity, 4000);
 setInterval(() => {
   refreshCapabilities();
   loadTarget();
