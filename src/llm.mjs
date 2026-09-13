@@ -70,10 +70,15 @@ async function askOne({ system, prompt, model, timeoutMs }) {
     });
   }
 
-  const content = body.choices?.[0]?.message?.content;
+  const choice = body.choices?.[0];
+  const content = choice?.message?.content;
   try {
     return { data: pullJson(content), model: body.model ?? model, ms: Date.now() - started, usage: body.usage };
   } catch {
-    throw new LlmError(`model did not return usable JSON: ${String(content).slice(0, 200)}`, { retryable: true });
+    // reasoning models sometimes spend the whole answer thinking and leave content empty
+    const why = content
+      ? String(content).slice(0, 200)
+      : `empty answer (finish ${choice?.finish_reason ?? '?'}${choice?.message?.reasoning ? ', only reasoning came back' : ''}${choice?.error ? `, ${choice.error.message}` : ''})`;
+    throw new LlmError(`model did not return usable JSON: ${why}`, { retryable: true });
   }
 }
