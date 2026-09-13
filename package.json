@@ -11,6 +11,7 @@
     "worker": "node --env-file=.env src/worker.mjs",
     "target": "node --env-file=.env target/server.mjs",
     "phase2": "node --env-file=.env scripts/phase2.mjs",
+    "phase3": "node --env-file=.env scripts/phase3.mjs",
     "check:anakin": "node --env-file=.env scripts/check-anakin.mjs",
     "test": "node --test \"test/*.test.mjs\""
   },

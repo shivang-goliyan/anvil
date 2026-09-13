@@ -1,8 +1,11 @@
 // HTTP API. Never does the long work itself: it writes rows and the worker picks them up.
 
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { db } from './db.mjs';
 import { cleanInputs, queueRun, queueRepair, Busy } from './jobs.mjs';
+import { createReadCapability } from './capabilities.mjs';
+import { onAllowlist, allowedSites } from './conduct.mjs';
 
 const PORT = Number(process.env.PORT ?? 3310);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -49,7 +52,7 @@ const afterSeq = (url) => Math.max(0, Number.parseInt(url.searchParams.get('afte
 
 async function capabilitySummary(id) {
   const cap = await db.capability.findUnique({ where: { id }, include: { plan: { select: { id: true, version: true, origin: true } } } });
-  return cap && { id: cap.id, name: cap.name, status: cap.status, plan: cap.plan };
+  return cap && { id: cap.id, name: cap.name, status: cap.status, engine: cap.engine, targetUrl: cap.targetUrl, plan: cap.plan };
 }
 
 const traceSince = (where, after) =>
@@ -58,11 +61,71 @@ const traceSince = (where, after) =>
 const routes = [
   [
     'POST',
+    /^\/api\/capabilities$/,
+    async (req, res) => {
+      const body = await readJson(req);
+      let url;
+      try {
+        url = new URL(String(body.url ?? '').trim());
+      } catch {
+        return send(res, 400, { error: 'that does not look like a URL' });
+      }
+      if (!['http:', 'https:'].includes(url.protocol)) return send(res, 400, { error: 'only http and https pages' });
+      const goal = String(body.goal ?? '').trim();
+      if (goal.length < 10 || goal.length > 300) return send(res, 400, { error: 'describe the goal in 10 to 300 characters' });
+      // the allowlist is cheap to check here; robots.txt is checked by the worker before it fetches anything
+      if (!onAllowlist(url.toString())) return send(res, 403, { error: `${url.hostname} is not on this deployment's allowlist`, allowed: allowedSites() });
+      const busy = await db.derivation.count({ where: { outcome: { in: ['queued', 'running'] } } });
+      if (busy >= 3) return send(res, 429, { error: 'a few capabilities are already being worked out, try again in a minute' });
+      const { cap, derivation } = await createReadCapability({ url: url.toString(), goal, name: body.name });
+      return send(res, 202, { capabilityId: cap.id, derivationId: derivation.id, poll: `/api/derivations/${derivation.id}` });
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/capabilities\/([\w-]+)$/,
+    async (req, res, [id]) => {
+      const cap = await db.capability.findUnique({ where: { id }, include: { plan: true, contract: true } });
+      if (!cap) return send(res, 404, { error: 'no capability with that id' });
+      const { contract, plan, ...rest } = cap;
+      return send(res, 200, {
+        ...rest,
+        plan: plan && { id: plan.id, version: plan.version, origin: plan.origin, steps: plan.steps, createdAt: plan.createdAt },
+        contract: contract && { requiredFields: contract.requiredFields, fieldTypes: contract.fieldTypes, minRecords: contract.minRecords, bounds: contract.bounds, sampleSize: contract.goldenSample?.records?.length ?? null },
+      });
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/derivations\/([\w-]+)$/,
+    async (req, res, [id], url) => {
+      const derivation = await db.derivation.findUnique({ where: { id } });
+      if (!derivation) return send(res, 404, { error: 'no derivation with that id' });
+      const [capability, trace] = await Promise.all([capabilitySummary(derivation.capabilityId), traceSince({ derivationId: id }, afterSeq(url))]);
+      const { screenshot, ...rest } = derivation;
+      return send(res, 200, { derivation: { ...rest, screenshot: screenshot ? `/api/derivations/${id}/screenshot` : null }, capability, trace });
+    },
+  ],
+  [
+    'GET',
+    /^\/api\/derivations\/([\w-]+)\/screenshot$/,
+    async (req, res, [id]) => {
+      const derivation = await db.derivation.findUnique({ where: { id }, select: { screenshot: true } });
+      if (!derivation?.screenshot) return send(res, 404, { error: 'no screenshot for that derivation' });
+      const png = await readFile(derivation.screenshot).catch(() => null);
+      if (!png) return send(res, 404, { error: 'the screenshot file is gone' });
+      res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' });
+      return res.end(png);
+    },
+  ],
+  [
+    'POST',
     /^\/api\/runs$/,
     async (req, res) => {
       const body = await readJson(req);
       const cap = typeof body.capabilityId === 'string' && (await db.capability.findUnique({ where: { id: body.capabilityId } }));
       if (!cap) return send(res, 404, { error: 'no capability with that id' });
+      if (!cap.planId) return send(res, 409, { error: cap.status === 'deriving' ? 'this capability is still being worked out' : 'this capability has no plan to run' });
       const { inputs, error } = cleanInputs(cap.inputSchema, body.inputs);
       if (error) return send(res, 400, { error });
       try {
@@ -92,6 +155,7 @@ const routes = [
       const cap = typeof body.capabilityId === 'string' && (await db.capability.findUnique({ where: { id: body.capabilityId } }));
       if (!cap) return send(res, 404, { error: 'no capability with that id' });
       if (!cap.contractId) return send(res, 409, { error: 'this capability has never had a good run, so there is no contract to repair against yet' });
+      if (cap.engine !== 'browser') return send(res, 409, { error: 'repair is only wired up for browser capabilities so far' });
       try {
         const repair = await queueRepair(cap.id, { trigger: 'manual' });
         return send(res, 202, { id: repair.id, outcome: repair.outcome, poll: `/api/repairs/${repair.id}` });
