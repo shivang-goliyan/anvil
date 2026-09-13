@@ -1,0 +1,119 @@
+// The only process that talks to Anakin or the model. Polls the Job table and does one job at a time.
+
+import { db } from './db.mjs';
+import { tracer } from './trace.mjs';
+import { executeRun } from './run.mjs';
+import { executeRepair } from './repair.mjs';
+import { hourlyCap, creditsUsed } from './budget.mjs';
+
+const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
+// A working worker touches lockedAt every BEAT_MS. A running job nobody has touched for LEASE_MS
+// is treated as abandoned. Without this, a second worker would steal jobs that are still alive.
+const BEAT_MS = 10_000;
+const LEASE_MS = 45_000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const owner = (job) => (job.kind === 'run' ? { runId: job.refId } : { repairId: job.refId });
+
+let stopping = false;
+
+// Mark the run or repair as finished badly, so nobody polls it forever.
+async function giveUp(job, why) {
+  const log = await tracer(owner(job));
+  await log('error', why);
+  await db.job.update({ where: { id: job.id }, data: { status: 'failed', error: why.slice(0, 2000) } });
+  if (job.kind === 'run') {
+    await db.run.updateMany({ where: { id: job.refId, status: { in: ['queued', 'running'] } }, data: { status: 'failed', endedAt: new Date(), result: { why } } });
+  } else {
+    const rec = await db.repairAttempt.findUnique({ where: { id: job.refId } });
+    if (rec && ['queued', 'running'].includes(rec.outcome)) {
+      await db.repairAttempt.update({ where: { id: rec.id }, data: { outcome: 'failed', diagnosis: why } });
+      // half-finished repair: don't pretend the capability is fine
+      await db.capability.updateMany({ where: { id: rec.capabilityId, status: 'repairing' }, data: { status: 'degraded' } });
+    }
+  }
+}
+
+async function reclaimAbandoned() {
+  const stale = await db.job.findMany({ where: { status: 'running', lockedAt: { lt: new Date(Date.now() - LEASE_MS) } } });
+  for (const job of stale) {
+    if (job.tries >= 2) {
+      await giveUp(job, `a worker died twice while doing this ${job.kind}, giving up on it`);
+      continue;
+    }
+    // only if nobody else got to it first
+    const { count } = await db.job.updateMany({ where: { id: job.id, status: 'running', lockedAt: job.lockedAt }, data: { status: 'queued', lockedAt: null } });
+    if (!count) continue;
+    const log = await tracer(owner(job));
+    await log('worker', `the worker doing this went quiet ${Math.round((Date.now() - job.lockedAt) / 1000)}s ago, starting it again`);
+    console.log(`reclaimed abandoned ${job.kind} ${job.refId}`);
+  }
+}
+
+async function claim() {
+  const next = await db.job.findFirst({
+    where: { status: 'queued', runAfter: { lte: new Date() } },
+    orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
+  });
+  if (!next) return null;
+  const { count } = await db.job.updateMany({
+    where: { id: next.id, status: 'queued' },
+    data: { status: 'running', lockedAt: new Date(), tries: { increment: 1 } },
+  });
+  return count === 1 ? next : null;
+}
+
+async function work(job) {
+  const log = await tracer(owner(job));
+  const started = Date.now();
+  console.log(`picked up ${job.kind} ${job.refId}`);
+  const beat = setInterval(() => db.job.updateMany({ where: { id: job.id, status: 'running' }, data: { lockedAt: new Date() } }).catch(() => {}), BEAT_MS);
+  try {
+    if (job.kind === 'run') await executeRun(job.refId, log);
+    else if (job.kind === 'repair') await executeRepair(job.refId, job.payload ?? {}, log);
+    else throw new Error(`no idea how to do a "${job.kind}" job`);
+    await log.flush();
+    await db.job.update({ where: { id: job.id }, data: { status: 'done' } });
+    console.log(`finished ${job.kind} ${job.refId} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  } catch (err) {
+    console.error(`${job.kind} ${job.refId} blew up:`, err);
+    await log.flush();
+    await giveUp(job, `the worker hit an error it did not expect: ${err.message}`);
+  } finally {
+    clearInterval(beat);
+  }
+}
+
+let current = null;
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => {
+    if (stopping) process.exit(1);
+    stopping = true;
+    console.log(current ? `${sig}: finishing the current job first (send again to quit now)` : `${sig}: stopping`);
+  });
+}
+
+console.log(`worker up. polling every ${POLL_MS}ms, Anakin cap ${hourlyCap()} credits/hour, ${await creditsUsed()} used in the last hour`);
+
+let lastReclaim = 0;
+while (!stopping) {
+  let job = null;
+  try {
+    if (Date.now() - lastReclaim > BEAT_MS) {
+      lastReclaim = Date.now();
+      await reclaimAbandoned();
+    }
+    job = await claim();
+  } catch (err) {
+    console.error('could not read the job queue:', err.message);
+  }
+  if (!job) {
+    await sleep(POLL_MS);
+    continue;
+  }
+  current = work(job);
+  await current;
+  current = null;
+}
+
+await db.$disconnect();
+console.log('worker stopped');

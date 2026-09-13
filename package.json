@@ -6,8 +6,9 @@
   "scripts": {
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "seed": "node --env-file=.env scripts/seed.mjs",
+    "worker": "node --env-file=.env src/worker.mjs",
     "target": "node --env-file=.env target/server.mjs",
-    "phase1": "node --env-file=.env scripts/phase1.mjs",
     "check:anakin": "node --env-file=.env scripts/check-anakin.mjs"
   },
   "dependencies": {

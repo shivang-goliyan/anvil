@@ -3,11 +3,14 @@ import { runPlan } from './plan.mjs';
 import { deriveContract, checkContract } from './contract.mjs';
 import { pageShape } from './page-shape.mjs';
 import { triage } from './triage.mjs';
-import { saveCapability } from './store.mjs';
+import { OverBudget } from './errors.mjs';
+import { db } from './db.mjs';
+import { loadCapability, sessionOptions, learnContract, setStatus } from './capabilities.mjs';
+import { queueRepair, Busy } from './jobs.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export const sessionOptions = (cap) => (cap.forward ? { origin: new URL(cap.targetUrl).origin, forward: cap.forward } : {});
+const stepLabel = (i, s) => `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` : s.url ? ` ${s.url}` : s.fields ? ` ${Object.keys(s.fields).join(', ')}` : ''}`;
 
 async function attempt(cap, inputs, log) {
   let session;
@@ -16,62 +19,126 @@ async function attempt(cap, inputs, log) {
   } catch (error) {
     return { result: null, error, canaryPresent: false, pageText: '' };
   }
-  log('browser', 'opened remote browser session');
   let result = null;
   let error = null;
   try {
     try {
       result = await runPlan(cap.plan, inputs, session, {
         baseUrl: cap.targetUrl,
-        onStep: (i, s) => log('step', `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` : s.url ? ` ${s.url}` : ''}`),
+        onStep: (i, s) => log('step', stepLabel(i, s), { index: i, step: s }),
       });
     } catch (err) {
       error = err;
     }
     const canaryPresent = (await session.page.locator(cap.canary).count().catch(() => 0)) > 0;
     const pageText = error ? await session.page.innerText('body').catch(() => '') : '';
-    return { result, error, canaryPresent, pageText };
+    // structure only, raw page html never goes into the trace
+    const pageAtFailure = error ? pageShape(await session.page.content().catch(() => '')).shape : null;
+    return { result, error, canaryPresent, pageText, pageAtFailure };
   } finally {
     const ms = await session.close();
-    log('browser', `closed session after ${(ms / 1000).toFixed(1)}s`);
+    log('browser', `closed session after ${(ms / 1000).toFixed(1)}s`, { ms });
   }
 }
 
 // One run of a capability with concrete inputs. Retries transient trouble, never repairs.
-export async function runCapability(cap, inputs, { log }) {
+async function runCapability(cap, inputs, log) {
   for (let tryNo = 1; tryNo <= 3; tryNo++) {
-    log('run', `run with plan v${cap.plan.version}${tryNo > 1 ? ` (retry ${tryNo - 1})` : ''}`);
-    const { result, error, canaryPresent, pageText } = await attempt(cap, inputs, log);
+    log('run', `running plan v${cap.plan.version}${tryNo > 1 ? ` (retry ${tryNo - 1})` : ''}`, { planId: cap.plan.id, version: cap.plan.version, try: tryNo });
+    const { result, error, canaryPresent, pageText, pageAtFailure } = await attempt(cap, inputs, log);
+
+    if (error instanceof OverBudget) {
+      log('budget', `${error.message}. Not calling Anakin.`, { used: error.used, cap: error.cap });
+      return { status: 'capped', why: error.message };
+    }
+
     const records = result?.records ?? [];
-    if (records.length) log('result', JSON.stringify(records));
+    if (records.length) log('result', `extracted ${records.length} record${records.length === 1 ? '' : 's'}`, { records });
 
     if (!error && !cap.contract) {
       const incomplete = records.length === 0 || Object.values(records[0]).some((v) => v === null);
-      if (incomplete) return { ok: false, failureKind: 'structural', why: 'first run came back incomplete, nothing to learn a contract from', records };
-      cap.contract = deriveContract(records, inputs);
-      cap.snapshot = pageShape(result.entryHtml);
-      cap.plan.derivedFrom = cap.snapshot.hash;
-      await saveCapability(cap);
-      log('contract', `golden sample captured. required: ${cap.contract.requiredFields.join(', ')}; echoes: ${JSON.stringify(cap.contract.echoes)}`);
-      return { ok: true, records };
+      if (incomplete) {
+        log('contract', 'first run came back incomplete, nothing to learn a contract from', { records });
+        return { status: 'failed', failureKind: 'structural', why: 'first run came back incomplete', records };
+      }
+      const contract = deriveContract(records, inputs);
+      await learnContract(cap, { contract, inputs, snapshot: pageShape(result.entryHtml) });
+      log('contract', `golden sample captured. required: ${contract.requiredFields.join(', ')}`, {
+        requiredFields: contract.requiredFields,
+        fieldTypes: contract.fieldTypes,
+        bounds: contract.bounds,
+        echoes: contract.echoes,
+      });
+      return { status: 'succeeded', records };
     }
 
     const contractCheck = error ? null : checkContract(cap.contract, records, inputs);
-    if (contractCheck) log('contract', contractCheck.pass ? 'contract passed' : `contract failed: ${contractCheck.problems.join('; ')}`);
+    if (contractCheck)
+      log('contract', contractCheck.pass ? 'contract passed' : `contract failed: ${contractCheck.problems.join('; ')}`, { problems: contractCheck.problems });
+    if (error)
+      log('error', error.message, {
+        reason: error.reason ?? error.code ?? null,
+        step: error.index ?? null,
+        url: error.url ?? null,
+        docStatus: error.docStatus ?? error.status ?? null,
+        pageAtFailure,
+      });
+
     const verdict = triage({ error, contractCheck, records, canaryPresent, pageText });
-    if (error) log('error', error.message);
+    if (verdict.kind === 'ok') return { status: 'succeeded', records };
+    log('triage', `${verdict.kind}: ${verdict.why}`, { kind: verdict.kind, canaryPresent });
 
-    if (verdict.kind === 'ok' || verdict.kind === 'empty') return { ok: true, records, empty: verdict.kind === 'empty' };
-    log('triage', `${verdict.kind}: ${verdict.why}`);
-
+    if (verdict.kind === 'empty') return { status: 'succeeded', records, empty: true };
     if (verdict.kind === 'transient' && tryNo < 3) {
-      await sleep(1000 * 2 ** tryNo);
+      const wait = 1000 * 2 ** tryNo;
+      log('retry', `transient, not touching the plan. trying again in ${wait / 1000}s`, { wait });
+      await sleep(wait);
       continue;
     }
     if (verdict.kind === 'blocked') {
-      cap.status = 'degraded';
-      await saveCapability(cap);
+      await setStatus(cap.id, 'degraded');
+      log('health', 'capability marked degraded. A new plan cannot fix a block, so no repair', { status: 'degraded' });
     }
-    return { ok: false, failureKind: verdict.kind, why: verdict.why, error, records };
+    return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records };
   }
+}
+
+export async function executeRun(runId, log) {
+  const run = await db.run.findUnique({ where: { id: runId } });
+  if (!run) return log('error', 'this run no longer exists (the capability was probably reset)');
+  const cap = await loadCapability(run.capabilityId);
+  if (!cap?.plan) {
+    log('error', 'capability has no active plan');
+    return db.run.update({ where: { id: runId }, data: { status: 'failed', endedAt: new Date(), result: { why: 'no active plan' } } });
+  }
+
+  await db.run.update({ where: { id: runId }, data: { status: 'running', startedAt: new Date(), planId: cap.plan.id } });
+  const out = await runCapability(cap, run.inputs, log);
+  const result = { records: out.records ?? [], ...(out.empty && { empty: true }), ...(out.why && { why: out.why }) };
+
+  if (out.failureKind === 'structural') {
+    const fresh = await loadCapability(cap.id);
+    if (!fresh.contract) {
+      log('repair', 'no contract yet, so a repaired plan would have nothing to be checked against. Not repairing');
+    } else if (fresh.status === 'degraded') {
+      log('repair', 'capability is degraded, so it will not auto-repair. A manual repair can still be triggered', { circuitBreaker: true });
+    } else {
+      try {
+        const repair = await queueRepair(cap.id, { trigger: 'run-failure', failure: out.why, inputs: run.inputs, runId });
+        result.repairId = repair.id;
+        log('repair', 'structural failure, queued a repair', { repairId: repair.id });
+      } catch (err) {
+        if (!(err instanceof Busy)) throw err;
+        result.repairId = err.existing.repairId;
+        log('repair', 'a repair is already on the way for this capability', { repairId: err.existing.repairId });
+      }
+    }
+  }
+
+  // trace first, so anyone polling sees the whole story by the time the status flips
+  await log('done', out.status === 'succeeded' ? `run succeeded${out.empty ? ' with an empty result' : ''}` : out.status === 'capped' ? 'run skipped, credit cap' : `run failed (${out.failureKind})`, {
+    status: out.status,
+    failureKind: out.failureKind ?? null,
+  });
+  await db.run.update({ where: { id: runId }, data: { status: out.status, failureKind: out.failureKind ?? null, result, endedAt: new Date() } });
 }
