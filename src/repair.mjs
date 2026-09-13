@@ -118,6 +118,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
             baseUrl: cap.targetUrl,
             onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.selector ?? s.url ?? Object.keys(s.fields ?? {}).join(', ')}`, { index: i, step: s }),
             beforePress: (i, s) => snap(`page before step ${i + 1}`, { index: i, kind: s.kind }),
+            afterStep: (i, s) => snap(`page after step ${i + 1}`, { index: i, kind: s.kind, after: true }),
           }),
           'running the candidate plan',
         );

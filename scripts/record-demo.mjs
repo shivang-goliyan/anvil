@@ -5,7 +5,7 @@
 
 import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { db } from '../src/db.mjs';
-import { SHOTS, SHOT_NAME } from '../src/shots.mjs';
+import { SHOTS, SHOT_NAME, beforeAndAfter } from '../src/shots.mjs';
 
 const pick = { seq: true, kind: true, label: true, detail: true, createdAt: true };
 
@@ -58,6 +58,9 @@ for (const e of jobs.flatMap((j) => j.trace)) {
     e.kind = 'shot-missing';
   }
 }
+
+const repairJob = jobs.find((j) => j.type === 'repair');
+if (before) repairJob.final.compare = beforeAndAfter(jobs[0].trace, jobs[1].trace);
 
 const out = { recordedAt: (before ?? failed).createdAt, capability: cap.name, jobs };
 console.log(`kept ${copied} screenshots with the recording`);

@@ -251,9 +251,17 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true, config, described: describe(config) });
       }
       if (req.method === 'POST' && url.pathname === '/_admin/break') {
-        const { kind, key } = JSON.parse((await readBody(req)) || '{}');
+        const { kind, key, ...params } = JSON.parse((await readBody(req)) || '{}');
         if (!BREAKS[kind]) return sendJson(res, 400, { error: `unknown break kind "${kind}"` });
-        return sendJson(res, 200, { ...applyBreak(config, kind, key), config, described: describe(config) });
+        // work on a copy, so a change that fails its checks leaves the site exactly as it was
+        const next = structuredClone(config);
+        try {
+          const out = applyBreak(next, kind, key, params);
+          config = next;
+          return sendJson(res, 200, { ...out, config, described: describe(config) });
+        } catch (err) {
+          return sendJson(res, 400, { error: err.message });
+        }
       }
     }
 

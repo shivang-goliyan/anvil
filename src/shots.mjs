@@ -28,3 +28,15 @@ export function shooter(session, log) {
     }
   };
 }
+
+// Two pictures for a repair: what the last good run saw at the point in the flow where the broken
+// run got stuck, and what the broken run saw there instead.
+export function beforeAndAfter(goodTrace = [], failedTrace = []) {
+  const shots = (trace) => trace.filter((e) => e.kind === 'shot' && e.detail?.src);
+  const stuck = shots(failedTrace).find((e) => e.detail.stuck);
+  const good = shots(goodTrace).filter((e) => !e.detail.stuck);
+  if (!stuck || !good.length) return null;
+  const at = stuck.detail.index ?? Infinity;
+  const before = good.find((e) => (e.detail.index ?? -1) >= at) ?? good.at(-1);
+  return { before: before.detail.src, after: stuck.detail.src };
+}

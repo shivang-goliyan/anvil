@@ -304,8 +304,9 @@ function viewer(where = "Harbor Lane Library, as Anvil's cloud browser saw it") 
   };
 }
 
-function shotCaption(d, presses) {
+function shotCaption(d, presses, words) {
   if (d.stuck) return ['Where it got stuck', 'bad'];
+  if (d.after) return [words || 'After that step', ''];
   if (d.kind === 'extract') return ['The page Anvil read the result from', 'good'];
   return [presses ? 'The next page, just before pressing its button' : 'The form filled in, just before pressing the button', ''];
 }
@@ -404,8 +405,8 @@ function runView(card, capability) {
         steps[d.index] = d.step;
         list.step(plainStep(d.step, inputs), stepText(d.step));
       } else if (e.kind === 'shot') {
-        const [text, tone] = shotCaption(d, presses);
-        if (!d.stuck && d.kind !== 'extract') presses++;
+        const [text, tone] = shotCaption(d, presses, plainStep(steps[d.index], inputs));
+        if (!d.stuck && !d.after && d.kind !== 'extract') presses++;
         view.add(d.src, text, tone);
       } else if (e.kind === 'error') {
         failure = d;
@@ -427,8 +428,9 @@ function runView(card, capability) {
         card.body.append(h('div', { class: 'verdict blocked' }, h('h4', { text: 'Not repairing automatically' }), h('p', { text: e.label })));
       }
     },
-    finish(json, { replay }) {
+    finish(json, { replay, others }) {
       const r = json.run;
+      const mine = !replay && !others;
       stopClock(card, r.endedAt && r.startedAt ? Date.parse(r.endedAt) - Date.parse(r.startedAt) : undefined);
       const records = r.result?.records ?? [];
       if (r.status === 'succeeded') {
@@ -448,24 +450,31 @@ function runView(card, capability) {
         } else {
           card.body.prepend(recordsView(records));
         }
-        if (!replay) afterRun(true, false);
+        if (mine && !booking) toast(`Read ${records.length} record${records.length === 1 ? '' : 's'}`, 'good', card.node, `Live from ${capability?.targetUrl ? new URL(capability.targetUrl).hostname : 'the website'}.`);
+        if (mine && booking) {
+          afterRun(true, false);
+          if (rec?.reference) toast(`Booked · ${rec.reference}`, 'good', card.node, story.again ? 'The new steps worked on the changed website.' : 'Read straight off the confirmation page.');
+        }
       } else if (r.status === 'capped') {
         list.finish();
         setChip(card, 'budget used up', 'warm');
         if (!card.body.querySelector('.verdict')) card.body.append(h('div', { class: 'verdict capped' }, h('h4', { text: 'The hourly credit budget is used up' }), h('p', { text: r.result?.why ?? '' })));
-        if (!replay) playRecording('This run hit the hourly Anakin budget.');
+        if (mine) playRecording('This run hit the hourly Anakin budget.');
       } else {
         list.fail();
         const words = { structural: 'website changed', transient: 'hiccup', blocked: 'blocked' };
         setChip(card, `did not work · ${words[r.failureKind] ?? r.failureKind ?? 'failed'}`, 'bad');
         if (!card.body.querySelector('.verdict')) card.body.append(h('div', { class: 'verdict' }, h('h4', { text: 'It did not work' }), h('p', { text: humanize(r.result?.why) })));
-        if (!replay) afterRun(false, r.failureKind === 'structural');
+        if (mine && booking) {
+          afterRun(false, r.failureKind === 'structural');
+          toast(r.failureKind === 'structural' ? 'The website changed, so the booking did not go through' : 'That booking did not go through', 'bad', card.node, r.result?.repairId ? 'Anvil is fixing itself now. Watch below.' : humanize(r.result?.why));
+        }
         if (r.result?.repairId) {
           card.next.append(h('p', { class: 'handoff', text: 'Anvil is fixing itself, below ↓' }));
-          if (!replay) follow('repair', r.result.repairId);
+          if (!replay) follow('repair', r.result.repairId, { others });
         }
       }
-      if (!replay) renderStory();
+      if (mine && booking) renderStory();
     },
   };
 }
@@ -480,6 +489,7 @@ function repairView(card) {
   let changes = null;
   let running = null;
   let shots = null;
+  let candidate = [];
   let presses = 0;
   let skipped = 0;
   const add = (opts) => {
@@ -494,6 +504,17 @@ function repairView(card) {
   return {
     context(json) {
       fromSteps ??= json.fromPlan?.steps ?? null;
+      if (json.compare && !card.body.querySelector('.compare')) {
+        const pic = (src, title, cls) => h('figure', { class: cls }, h('figcaption', { text: title }), h('a', { href: src, target: '_blank', rel: 'noopener', title: 'Open full size' }, h('img', { src, alt: title })));
+        card.body.prepend(
+          h(
+            'div',
+            { class: 'compare' },
+            h('p', { class: 'compare-title', text: 'The website before, and what the saved steps ran into' }),
+            h('div', { class: 'pair' }, pic(json.compare.before, 'Before · the last good booking saw this', 'before'), pic(json.compare.after, 'Now · where the old steps got stuck', 'after')),
+          ),
+        );
+      }
     },
     event(e) {
       const d = e.detail ?? {};
@@ -528,6 +549,7 @@ function repairView(card) {
         add({ icon: '✎', title: `New steps written in ${(d.ms / 1000).toFixed(1)}s`, text: `by ${d.model}${skipped ? `, after skipping ${skipped} model${skipped === 1 ? '' : 's'} that ${skipped === 1 ? 'was' : 'were'} busy or out of free requests` : ''}` });
         skipped = 0;
       } else if (e.kind === 'plan') {
+        candidate = d.steps ?? [];
         add({ icon: '≡', tone: 'good', title: 'The new steps', extra: plainDiff(fromSteps ?? [], d.steps ?? []) });
         const v = viewer();
         shots = v;
@@ -537,8 +559,8 @@ function repairView(card) {
       } else if (e.kind === 'step' && running) {
         running.querySelector('p').textContent = short(plainStep(d.step), 110);
       } else if (e.kind === 'shot' && shots) {
-        const [text, tone] = shotCaption(d, presses);
-        if (!d.stuck && d.kind !== 'extract') presses++;
+        const [text, tone] = shotCaption(d, presses, plainStep(candidate[d.index]));
+        if (!d.stuck && !d.after && d.kind !== 'extract') presses++;
         shots.add(d.src, text, tone);
       } else if (e.kind === 'browser' && /went away/.test(e.label)) {
         add({ icon: '↻', title: 'The cloud browser dropped, so it opened a new one', text: 'That is the connection, not the steps, so the same steps run again.' });
@@ -571,7 +593,7 @@ function repairView(card) {
         add({ icon: '!', tone: 'bad', title: 'That try crashed', text: e.label });
       }
     },
-    finish(json, { replay }) {
+    finish(json, { replay, others }) {
       endLive(view);
       stopClock(card);
       const r = json.repair;
@@ -580,16 +602,21 @@ function repairView(card) {
       setChip(card, text, tone);
       if (r.outcome === 'skipped' && !card.body.querySelector('.outcome')) outcome('warm', 'Skipped', r.diagnosis ?? '');
       if (!replay) {
+        // a repair fixes the shared site, so everyone watching may book with it
         if (r.outcome === 'repaired') {
-          story.fixed = true;
           card.next.append(h('button', { type: 'button', class: 'btn blue', text: 'Book again with the new steps →', onclick: () => $('run-button').click() }));
+          toast(`Fixed · saved as version ${json.toPlan?.version ?? json.capability?.plan?.version ?? ''}`.trim(), 'good', card.node, 'Anvil wrote new steps and proved them with a real booking. Book again to see them work.');
         }
-        if (r.outcome === 'degraded') story.degraded = true;
-        if (r.outcome === 'capped') {
-          story.paused = true;
-          playRecording('The live repair had to pause.');
+        if (r.outcome === 'degraded') toast('Not fixed this time', 'bad', card.node, 'Three tries did not pass the check, so Anvil kept its old steps and says so.');
+        if (!others) {
+          if (r.outcome === 'repaired') story.fixed = true;
+          if (r.outcome === 'degraded') story.degraded = true;
+          if (r.outcome === 'capped') {
+            story.paused = true;
+            playRecording('The live repair had to pause.');
+          }
+          renderStory();
         }
-        renderStory();
       }
     },
   };
@@ -688,11 +715,12 @@ const TITLES = { run: 'Anvil books a room', repair: 'Anvil fixes itself', deriva
 
 // ------------------------------------------------------------------ following jobs
 
-async function follow(type, id, { scroll = true } = {}) {
+async function follow(type, id, { scroll = true, others = false } = {}) {
   const key = `${type}:${id}`;
   if (following.has(key)) return;
   following.add(key);
   const card = jobCard(TITLES[type], { forge: type === 'repair' });
+  if (others) card.node.classList.add('others');
   place(card.node, { scroll });
   let view = null;
   let after = 0;
@@ -709,7 +737,10 @@ async function follow(type, id, { scroll = true } = {}) {
       await sleep(2500);
       continue;
     }
-    view ??= VIEWS[type](card, json.capability);
+    if (!view) {
+      view = VIEWS[type](card, json.capability);
+      if (others) card.heading.after(h('span', { class: 'who', text: 'another visitor' }));
+    }
     view.context?.(json);
     for (const e of json.trace) {
       start ??= Date.parse(e.createdAt);
@@ -720,7 +751,7 @@ async function follow(type, id, { scroll = true } = {}) {
     const row = json[type];
     const state = row.status ?? row.outcome;
     if (!['queued', 'running'].includes(state)) {
-      view.finish(json, { replay: false });
+      view.finish(json, { replay: false, others });
       break;
     }
     await sleep(1000);
@@ -842,6 +873,7 @@ async function refreshCapabilities(select) {
   if (status !== 200) return;
   capabilities = json.capabilities.filter((c) => c.plan || c.status === 'deriving').sort((a, b) => (a.engine === 'browser' ? -1 : 0) - (b.engine === 'browser' ? -1 : 0) || json.capabilities.indexOf(b) - json.capabilities.indexOf(a));
   $('allowed').textContent = json.allowedSites.length ? json.allowedSites.join(', ') : 'none on this deployment';
+  renderRealCaps();
   const before = current();
   const beforeKey = before && `${before.id}:${before.status}:${before.plan?.version}`;
   selected = select ?? (capabilities.some((c) => c.id === selected) ? selected : capabilities[0]?.id);
@@ -869,15 +901,17 @@ async function run() {
   const inputs = Object.fromEntries(new FormData(form).entries());
   $('run-button').disabled = true;
   notice('run-notice', '');
+  posting = true;
   const { status, json } = await api('POST', '/api/runs', { capabilityId: cap.id, inputs });
+  posting = false;
   $('run-button').disabled = false;
   if (status === 202) {
     patron++;
     renderComposer(cap);
     follow('run', json.id);
   } else if (status === 409 && json.runId) {
-    notice('run-notice', 'Someone else is booking right now. Following their booking instead.');
-    follow('run', json.runId);
+    notice('run-notice', 'Another visitor is booking right now, so you are watching theirs. Try again when it finishes.');
+    follow('run', json.runId, { others: true });
   } else if (status === 503 && json.capped) {
     notice('run-notice', json.error, true);
     playRecording(`${json.error}.`);
@@ -904,6 +938,7 @@ $('repair-button').addEventListener('click', async () => {
 const ORIGINAL_NAMES = { name: 'full_name', email: 'email', seats: 'seats' };
 const BREAK_ICONS = { 'rename-field': 'Aa', 'add-step': '+', 'reorder-steps': '⇅', 'restyle-confirmation': '▤', surprise: '✦' };
 const BREAK_SHORT = {
+  custom: 'Your own change',
   'rename-field': 'Rename the Email box',
   'add-step': 'Add a “check your details” page',
   'reorder-steps': 'Ask for seats on a page of its own',
@@ -954,8 +989,10 @@ new ResizeObserver(() => {
 
 let shownVersion = null;
 let firstTarget = true;
+let knownBreaks = null;
+let changing = false;
 
-async function loadTarget() {
+async function loadTarget({ mine = false } = {}) {
   if (current() && current().engine !== 'browser') return;
   const { status, json } = await api('GET', '/api/target');
   if (status !== 200) return notice('site-notice', json.error ?? 'the demo site is not answering', true);
@@ -980,11 +1017,27 @@ async function loadTarget() {
     story.others = json.breaks.length;
     story.changed = json.breaks.length > 0;
     renderStory();
+    // somebody may be mid-booking or mid-repair as this page opens
+    if (json.busy?.runId) follow('run', json.busy.runId, { others: true, scroll: false });
+    if (json.busy?.repairId) follow('repair', json.busy.repairId, { others: true, scroll: false });
+  } else if (!mine && !changing && knownBreaks !== null && json.breaks.length !== knownBreaks) {
+    if (json.breaks.length > knownBreaks) {
+      const kind = json.breaks.at(-1).kind;
+      marker(`Another visitor changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '').replace(/^your own change$/, 'a change they typed in')}`, 'It is a shared demo, so you see their change too. Nobody has told Anvil.');
+      story.others++;
+      if (story.booked) Object.assign(story, { changed: true, broke: false, fixed: false, again: false, degraded: false, paused: false });
+    } else {
+      marker('Another visitor put everything back', 'The website is as built again, and Anvil is back to its first hand-written steps.', true);
+      Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, others: 0 });
+    }
+    renderStory();
   }
+  knownBreaks = json.breaks.length;
   const applied = new Set(json.breaks.map((b) => b.kind));
   const busy = !!json.busy;
   $('breaks').replaceChildren(
     ...Object.keys(json.kinds)
+      .filter((kind) => kind !== 'custom')
       .sort((a, b) => REPEATABLE.has(b) - REPEATABLE.has(a))
       .map((kind) =>
         h(
@@ -996,17 +1049,48 @@ async function loadTarget() {
       ),
     h('button', { type: 'button', class: 'brk reset', disabled: busy, onclick: () => breakSite(null) }, 'Put everything back'),
   );
+  renderYours(json.site, busy);
   if (busy) notice('site-notice', 'Anvil is busy on the website right now. Changing it waits until that finishes.');
   else if (/busy on the website/.test($('site-notice').textContent)) notice('site-notice', '');
 }
 
-async function breakSite(kind) {
+// the "change it your way" form, filled from the site as it is right now
+function renderYours(s, busy) {
+  const field = $('yours-field');
+  const order = $('yours-order');
+  const keep = { field: field.value, order: order.value };
+  field.replaceChildren(...s.fields.map((f) => h('option', { value: f.key, text: f.label })));
+  const label = (key) => s.fields.find((f) => f.key === key).label;
+  const perms = (xs) => (xs.length < 2 ? [xs] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
+  const now = s.fields.map((f) => f.key).join();
+  order.replaceChildren(...perms(s.fields.map((f) => f.key)).map((p) => h('option', { value: p.join(), text: `${p.map(label).join(' → ')}${p.join() === now ? ' (as it is)' : ''}` })));
+  if ([...field.options].some((o) => o.value === keep.field)) field.value = keep.field;
+  order.value = [...order.options].some((o) => o.value === keep.order) ? keep.order : now;
+  $('yours-form').querySelector('button').disabled = busy;
+}
+
+$('yours-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = Object.fromEntries(new FormData(e.target).entries());
+  const own = { order: form.order };
+  if (form.label.trim()) Object.assign(own, { field: form.field, label: form.label });
+  if (form.button.trim()) own.button = form.button;
+  const before = site.fields.map((f) => f.key).join();
+  if (!own.label && !own.button && own.order === before) return notice('site-notice', 'Type a new label or button text, or pick a different order first.', true);
+  await breakSite('custom', own);
+  // only the typed boxes; the selects already show the site as it now is
+  if (!$('site-notice').classList.contains('bad')) for (const name of ['label', 'button']) e.target.elements[name].value = '';
+});
+
+async function breakSite(kind, custom) {
   notice('site-notice', kind ? 'Changing the website…' : 'Putting everything back…');
-  const { status, json } = kind ? await api('POST', '/api/target/break', { kind }) : await api('POST', '/api/target/reset', {});
+  changing = true;
+  const { status, json } = kind ? await api('POST', '/api/target/break', { kind, ...custom }) : await api('POST', '/api/target/reset', {});
   if (status === 200) {
     notice('site-notice', kind ? 'Done. Now book again, at the top.' : '');
     if (kind) {
-      marker(`You changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '')}`, `${cap1(json.detail)}. Nobody has told Anvil. Book again to see what it does.`);
+      toast('Website changed', 'warm', null, 'Anvil has not been told. Book again and watch what happens.');
+      marker(kind === 'custom' ? 'You changed the website your way' : `You changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '')}`, `${cap1(json.detail)}. Nobody has told Anvil. Book again to see what it does.`);
       Object.assign(story, { changed: true, mine: true, broke: false, fixed: false, again: false, degraded: false, paused: false });
     } else {
       marker('Everything is back to the start', 'The website is as built, and Anvil is back to its hand-written first steps with nothing learned yet.', true);
@@ -1016,7 +1100,8 @@ async function breakSite(kind) {
   } else {
     notice('site-notice', json.error ?? `that did not work (${status})`, true);
   }
-  await loadTarget();
+  await loadTarget({ mine: true });
+  changing = false;
   await refreshCapabilities();
 }
 
@@ -1033,13 +1118,61 @@ async function loadBudget() {
 
 // ------------------------------------------------------------------ read another site
 
+// one card per real website Anvil has already learned; running one costs a scrape or a Wire call, no model
+function renderRealCaps() {
+  const reads = capabilities.filter((c) => c.engine !== 'browser' && c.plan);
+  $('real-caps').replaceChildren(
+    ...reads.slice(0, 6).map((c) =>
+      h(
+        'article',
+        {},
+        h('p', { class: 'host', text: new URL(c.targetUrl).hostname }),
+        h('h3', { text: cap1(c.goal) }),
+        h('p', { class: 'how', text: c.engine === 'wire' ? "through a ready-made Anakin Wire action" : `learned by Anvil · steps v${c.plan.version}` }),
+        h('button', {
+          type: 'button',
+          class: 'btn blue',
+          text: 'Read it live →',
+          onclick: async () => {
+            selected = c.id;
+            await refreshCapabilities(c.id);
+            renderComposer(current());
+            run();
+          },
+        }),
+      ),
+    ),
+  );
+  $('real-caps').hidden = !reads.length;
+}
+
+const EXAMPLES = [
+  { text: 'Top stories on Hacker News', url: 'https://news.ycombinator.com/', goal: 'the top stories with their title, link and points' },
+  { text: 'Upcoming Python events', url: 'https://www.python.org/', goal: 'upcoming Python community events with their dates and locations' },
+  { text: 'Quotes and their authors', url: 'https://quotes.toscrape.com/', goal: 'the quotes with their author and tags' },
+];
+$('read-examples').replaceChildren(
+  h('span', { text: 'Try:' }),
+  ...EXAMPLES.map((x) =>
+    h('button', {
+      type: 'button',
+      text: x.text,
+      onclick: () => {
+        const f = $('read-form');
+        f.elements.url.value = x.url;
+        f.elements.goal.value = x.goal;
+      },
+    }),
+  ),
+);
+
 $('read-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.target).entries());
   notice('read-notice', '');
   const { status, json } = await api('POST', '/api/capabilities', body);
   if (status === 202) {
-    notice('read-notice', 'Queued. It shows up in the list.');
+    notice('read-notice', 'Started. Follow it in the list above.');
     await refreshCapabilities();
     follow('derivation', json.derivationId);
   } else if (status === 503 && json.capped) {
@@ -1052,16 +1185,38 @@ $('read-form').addEventListener('submit', async (e) => {
 
 // ------------------------------------------------------------------ repairs nobody here asked for
 
+// The demo is shared, so everyone watching sees every booking and repair, not only their own.
+// A repair after a failed booking is picked up from that booking's card instead.
 let seenSince = Date.now();
+let posting = false;
 async function watchActivity() {
   const { status, json } = await api('GET', `/api/activity?since=${seenSince}`);
-  if (status !== 200) return;
+  if (status !== 200 || posting) return;
   seenSince = json.now;
+  for (const r of json.runs ?? []) if (!following.has(`run:${r.id}`)) follow('run', r.id, { others: true, scroll: false });
   for (const r of json.repairs) {
-    if (r.trigger !== 'monitor' || following.has(`repair:${r.id}`)) continue;
-    marker('Anakin Website Monitoring noticed the website changed', 'Nobody pressed anything and no booking has failed yet. Anvil is fixing itself ahead of time.', true);
-    follow('repair', r.id);
+    if (following.has(`repair:${r.id}`) || r.trigger === 'run-failure') continue;
+    if (r.trigger === 'monitor') {
+      marker('Anakin Website Monitoring noticed the website changed', 'Nobody pressed anything and no booking has failed yet. Anvil is fixing itself ahead of time.', true);
+      follow('repair', r.id);
+    } else {
+      follow('repair', r.id, { others: true, scroll: false });
+    }
   }
+}
+
+let toastTimer;
+function toast(title, tone, target, text) {
+  const node = $('toast');
+  node.className = `toast ${tone}`;
+  node.replaceChildren(h('b', { text: title }), text ? h('span', { text }) : null, target ? h('i', { text: 'show me ↓' }) : null);
+  node.hidden = false;
+  node.onclick = () => {
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    node.hidden = true;
+  };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (node.hidden = true), 8000);
 }
 
 renderStory();

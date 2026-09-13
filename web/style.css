@@ -91,6 +91,19 @@ button, input, select { font: inherit; letter-spacing: inherit; color: inherit; 
 .health .dot.degraded { background: var(--bad); box-shadow: 0 0 0 4px rgba(209, 59, 43, 0.15); }
 .nav-end { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 
+/* the confirmation that pops up when something finishes */
+.toast { position: fixed; z-index: 60; top: 84px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; align-items: center; padding: 14px 18px 14px 22px; border-radius: 18px; background: var(--ink); color: #fff; box-shadow: 0 24px 50px -18px rgba(20, 20, 22, 0.55); cursor: pointer; animation: drop 0.45s var(--ease) both; overflow: hidden; }
+.toast::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--blue); }
+.toast.good::before { background: #22c55e; }
+.toast.bad::before { background: var(--bad); }
+.toast.warm::before { background: var(--ember); }
+.toast b { font: 800 19px/1.2 var(--display); letter-spacing: -0.02em; }
+.toast span { grid-column: 1; font-size: 14px; color: #c9c9d2; line-height: 1.45; }
+.toast i { grid-column: 2; grid-row: 1 / span 2; font-style: normal; font-size: 12.5px; font-weight: 600; color: #fff; background: rgba(255, 255, 255, 0.12); padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+@keyframes drop { from { opacity: 0; transform: translate(-50%, -14px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.job .who { font: 600 11.5px var(--body); padding: 3px 9px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); }
+.job.forge .who { background: rgba(28, 63, 216, 0.25); color: #aab8ff; }
+
 /* ------------------------------------------------------------------ hero */
 
 .hero {
@@ -216,6 +229,19 @@ h1 em::after {
 .breaks .brk.wild .ico { background: var(--ember); color: #fff; }
 .breaks .brk.wild:not(:disabled):hover { background: #000; border-color: #000; }
 
+/* change it your way */
+.yours { margin-top: 10px; border: 1.5px solid var(--ink); border-radius: 16px; background: var(--surface); }
+.yours summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; padding: 10px 12px; font-size: 13.5px; font-weight: 700; }
+.yours summary::-webkit-details-marker { display: none; }
+.yours summary b { grid-row: 1 / span 2; width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--blue); color: #fff; font-size: 12px; }
+.yours summary span { font-size: 12px; font-weight: 500; color: var(--muted); }
+.yours form { display: grid; gap: 10px; padding: 2px 12px 12px; }
+.yours label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.yours .pair { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 6px; }
+.yours input, .yours select { height: 36px; min-width: 0; width: 100%; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--canvas); font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.yours input:focus, .yours select:focus { outline: none; border-color: var(--blue); background: #fff; }
+.yours .btn { justify-self: start; height: 36px; }
+
 .plans { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .plans li { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; background: var(--canvas); font-size: 13px; }
 .plans li.active { background: var(--blue-soft); }
@@ -228,11 +254,6 @@ h1 em::after {
 .meter i { display: block; height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--good), #7bc79b); transition: width 0.6s var(--ease); }
 .meter i.warm { background: linear-gradient(90deg, var(--ember), #ffb088); }
 
-.read-card summary { list-style: none; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
-.read-card summary::-webkit-details-marker { display: none; }
-.read-card form { display: grid; gap: 8px; margin-top: 12px; }
-.read-card input { height: 40px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); font-size: 14px; }
-.read-card button { justify-self: start; }
 
 /* ------------------------------------------------------------------ timeline */
 
@@ -406,6 +427,17 @@ h1 em::after {
 .diff .m { font-weight: 700; text-align: center; }
 .diff-legend { margin-top: 6px; font: 500 11.5px var(--mono); color: var(--faint); }
 
+.compare { margin: 18px 0 4px; }
+.compare-title { margin: 0 0 10px; font: 700 15.5px var(--display); letter-spacing: -0.015em; color: #fff; }
+.compare .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.compare figure { margin: 0; border-radius: 14px; overflow: hidden; background: var(--deep-2); border: 1px solid var(--deep-line); }
+.compare figure.after { border-color: rgba(255, 138, 122, 0.55); }
+.compare figcaption { padding: 7px 10px; font-size: 12px; font-weight: 600; color: #c9c9d2; }
+.compare .after figcaption { color: #ffb3a8; }
+.compare a { display: block; line-height: 0; background: #fff; }
+.compare img { width: 100%; aspect-ratio: 1000 / 560; object-fit: cover; object-position: top center; display: block; }
+@media (max-width: 640px) { .compare .pair { grid-template-columns: 1fr; } }
+
 .plain-diff { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
 .plain-diff li { display: grid; grid-template-columns: 66px 1fr; gap: 10px; align-items: baseline; padding: 6px 10px; border-radius: 10px; font-size: 14px; background: rgba(255, 255, 255, 0.03); color: #b9b9c3; }
 .plain-diff .m { font: 600 10.5px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: #6f6f7a; }
@@ -462,6 +494,30 @@ h1 em::after {
 .banner { display: flex; gap: 14px; align-items: flex-start; margin: 0 0 18px; padding: 16px 18px; border-radius: 18px; background: var(--ink); color: #ededf0; animation: rise 0.45s var(--ease) both; }
 .banner b { font: 700 11px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: #ff9a6b; white-space: nowrap; padding-top: 3px; }
 .banner p { margin: 0; font-size: 14.5px; line-height: 1.5; }
+
+/* ------------------------------------------------------------------ real websites */
+
+.real { max-width: 1180px; margin: 0 auto; padding: 8px 24px 88px; }
+.real-head { max-width: 760px; }
+.real h2 { margin: 0 0 12px; font: 800 clamp(30px, 4vw, 48px)/1.05 var(--display); letter-spacing: -0.045em; }
+.real-head > p:last-child { margin: 0; font-size: 16.5px; color: var(--muted); line-height: 1.55; }
+.real-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 26px; }
+.real-grid article { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 6px; }
+.real-grid .host { margin: 0; font: 600 12px var(--mono); color: var(--blue); }
+.real-grid h3 { margin: 0; font: 700 18px/1.25 var(--display); letter-spacing: -0.02em; }
+.real-grid .how { margin: 0 0 8px; font-size: 13px; color: var(--faint); }
+.real-grid .btn { margin-top: auto; justify-self: start; align-self: flex-start; }
+.real-teach { margin-top: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 20px 22px; box-shadow: var(--shadow-sm); }
+.real-teach .kicker { margin: 0 0 10px; font: 600 12px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); }
+.examples { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.examples span { font-size: 13px; color: var(--muted); margin-right: 2px; }
+.examples button { height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--canvas); font-size: 13px; font-weight: 600; cursor: pointer; }
+.examples button:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+.real-inputs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; }
+.real-inputs input { height: 44px; min-width: 0; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--canvas); font-size: 14.5px; }
+.real-inputs input:focus { outline: none; border-color: var(--blue); background: #fff; }
+.real-inputs .btn { height: 44px; }
+@media (max-width: 760px) { .real-inputs { grid-template-columns: 1fr; } .real-inputs .btn { justify-self: start; } .real { padding: 8px 16px 64px; } }
 
 /* ------------------------------------------------------------------ deep footer */
 

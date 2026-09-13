@@ -39,7 +39,7 @@ function coerce(raw, type) {
   return v === '' ? null : v;
 }
 
-export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {}, beforePress = async () => {} } = {}) {
+export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {}, beforePress = async () => {}, afterStep = async () => {} } = {}) {
   const { page } = session;
   const records = [];
   let entryHtml = null;
@@ -62,8 +62,10 @@ export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {
         const url = new URL(step.url, baseUrl).toString();
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
         if (entryHtml === null) entryHtml = await page.content();
+        await afterStep(index, step);
       } else if (step.kind === 'fill') {
         await page.fill(step.selector, fillIn(step.value, inputs), { timeout: STEP_TIMEOUT });
+        await afterStep(index, step);
       } else if (step.kind === 'click') {
         await page.click(step.selector, { timeout: STEP_TIMEOUT });
       } else if (step.kind === 'submit') {

@@ -63,6 +63,7 @@ async function attempt(cap, inputs, log) {
         baseUrl: cap.targetUrl,
         onStep: (i, s) => log('step', stepLabel(i, s), { index: i, step: s }),
         beforePress: (i, s) => snap(`page before step ${i + 1}`, { index: i, kind: s.kind }),
+        afterStep: (i, s) => snap(`page after step ${i + 1}`, { index: i, kind: s.kind, after: true }),
       });
       result = await session.within(PLAN_DEADLINE, plan, 'running the plan');
     } catch (err) {

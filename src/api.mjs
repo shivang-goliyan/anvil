@@ -9,7 +9,7 @@ import { createReadCapability, seedCapability } from './capabilities.mjs';
 import { onAllowlist, allowedSites } from './conduct.mjs';
 import { creditsUsed, hourlyCap } from './budget.mjs';
 import { reserveRoom } from '../capabilities/reserve-room.mjs';
-import { SHOTS, SHOT_NAME } from './shots.mjs';
+import { SHOTS, SHOT_NAME, beforeAndAfter } from './shots.mjs';
 
 const PORT = Number(process.env.PORT ?? 3310);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -120,6 +120,18 @@ async function capabilitySummary(id) {
   if (!cap) return null;
   const plan = cap.plan && { id: cap.plan.id, version: cap.plan.version, origin: cap.plan.origin, stepCount: Array.isArray(cap.plan.steps) ? cap.plan.steps.length : null };
   return { id: cap.id, name: cap.name, status: cap.status, engine: cap.engine, targetUrl: cap.targetUrl, plan };
+}
+
+// the failed run that started a repair, next to the last good run on the same plan
+async function compareFor(repair) {
+  const job = await db.job.findFirst({ where: { kind: 'repair', refId: repair.id }, select: { payload: true } });
+  const failed = job?.payload?.runId && (await db.run.findUnique({ where: { id: job.payload.runId }, select: { id: true, planId: true, createdAt: true } }));
+  if (!failed) return null;
+  const good = await db.run.findFirst({ where: { capabilityId: repair.capabilityId, planId: failed.planId, status: 'succeeded', createdAt: { lt: failed.createdAt } }, orderBy: { createdAt: 'desc' }, select: { id: true } });
+  if (!good) return null;
+  const shotsOf = (runId) => db.traceEvent.findMany({ where: { runId, kind: 'shot' }, orderBy: { seq: 'asc' }, select: { kind: true, detail: true } });
+  const [goodTrace, failedTrace] = await Promise.all([shotsOf(good.id), shotsOf(failed.id)]);
+  return beforeAndAfter(goodTrace, failedTrace);
 }
 
 const traceSince = (where, after) =>
@@ -242,8 +254,11 @@ const routes = [
     /^\/api\/activity$/,
     async (req, res, m, url) => {
       const since = new Date(Number(url.searchParams.get('since')) || Date.now() - 60_000);
-      const repairs = await db.repairAttempt.findMany({ where: { createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, select: { id: true, capabilityId: true, trigger: true, outcome: true, createdAt: true } });
-      return send(res, 200, { now: Date.now(), repairs });
+      const [repairs, runs] = await Promise.all([
+        db.repairAttempt.findMany({ where: { createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, select: { id: true, capabilityId: true, trigger: true, outcome: true, createdAt: true } }),
+        db.run.findMany({ where: { createdAt: { gt: since } }, orderBy: { createdAt: 'asc' }, take: 20, select: { id: true, capabilityId: true, status: true, createdAt: true } }),
+      ]);
+      return send(res, 200, { now: Date.now(), repairs, runs });
     },
   ],
   [
@@ -259,7 +274,9 @@ const routes = [
         await seedCapability(reserveRoom(), { reset: true });
         return send(res, 200, { detail: 'the site and the capability are back to how they started', ...c.described });
       }
-      const c = await targetAdmin('/_admin/break', { kind: body.kind, key: 'email' });
+      const own = body.kind === 'custom' ? { field: body.field, label: body.label, button: body.button, order: body.order } : {};
+      for (const [k, v] of Object.entries(own)) if (v !== undefined && typeof v !== 'string') return send(res, 400, { error: `"${k}" should be text` });
+      const c = await targetAdmin('/_admin/break', { kind: body.kind, key: 'email', ...own });
       return send(res, 200, { changed: c.changed, detail: c.detail, ...c.described });
     },
   ],
@@ -383,7 +400,9 @@ const routes = [
       if (!repair) return send(res, 404, { error: 'no repair with that id' });
       const planOf = (planId) => (planId ? db.plan.findUnique({ where: { id: planId }, select: { version: true, origin: true, steps: true } }) : null);
       const [capability, trace, fromPlan, toPlan] = await Promise.all([capabilitySummary(repair.capabilityId), traceSince({ repairId: id }, afterSeq(url)), planOf(repair.fromPlanId), planOf(repair.toPlanId)]);
-      return send(res, 200, { repair, capability, trace, fromPlan, toPlan });
+      // only on the first poll: the page shows it once, at the top of the repair
+      const compare = afterSeq(url) === 0 ? await compareFor(repair) : undefined;
+      return send(res, 200, { repair, capability, trace, fromPlan, toPlan, compare });
     },
   ],
 ];

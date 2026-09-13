@@ -18,3 +18,26 @@ attirebytatsavi.com, www.attirebytatsavi.com {
 		reverse_proxy 127.0.0.1:3310
 	}
 }
+
+# The same app on its own name. This one is not behind Cloudflare, so a Cf-Connecting-Ip header can
+# only have come from the client and is dropped before the app reads it for rate limits.
+anvil.kgbnetwork.com {
+	encode gzip
+
+	handle_path /harbor-lane/* {
+		@readonly {
+			method GET HEAD
+			not path /_admin*
+		}
+		handle @readonly {
+			reverse_proxy 127.0.0.1:4310
+		}
+		respond "The demo site is read-only here. Anvil books rooms on it through its own private connection." 405
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3310 {
+			header_up -Cf-Connecting-Ip
+		}
+	}
+}

@@ -29,6 +29,8 @@
   </nav>
 </header>
 
+<div class="toast" id="toast" role="status" aria-live="assertive" hidden></div>
+
 <section class="hero">
   <div class="hero-title">
     <p class="eyebrow"><span class="live-dot"></span>Live demo · everything here runs for real · nothing to install</p>
@@ -62,11 +64,12 @@
     <p class="kicker"><i>B</i>Anvil's job</p>
     <h3>Book a room, like a person would</h3>
     <p>Anvil drives a real cloud browser through Anakin: it opens the booking page, types the name, email and number of seats, presses the button, and reads the booking reference off the confirmation page.</p>
+    <a class="more" href="#real">It also reads real websites <span aria-hidden="true">↓</span></a>
   </article>
   <article>
     <p class="kicker"><i>C</i>The twist</p>
     <h3>You change the website</h3>
-    <p>Rename a box, add a page, or let the site scramble itself at random. Anvil's saved steps stop fitting. Nobody tells it what changed. Watch it work that out and prove the fix with a real booking.</p>
+    <p>Rename a box, add a page, let the site scramble itself at random, or type your own change. Anvil's saved steps stop fitting, and nobody tells it what changed. Watch it work that out and prove the fix with a real booking.</p>
   </article>
 </section>
 
@@ -101,6 +104,17 @@
       <h4 class="rail-sub">Change the website</h4>
       <p class="card-note tight">Each button really changes the site. Anvil is not told what changed.</p>
       <div class="breaks" id="breaks"></div>
+      <details class="yours" id="yours">
+        <summary><b>✎</b> Or change it your way <span>type anything, so nobody could have prepared for it</span></summary>
+        <form id="yours-form" autocomplete="off">
+          <label>Rename a box
+            <span class="pair"><select name="field" id="yours-field" aria-label="Which box"></select><input name="label" maxlength="40" placeholder="new label, e.g. Where should we write?" aria-label="New label"></span>
+          </label>
+          <label>New button text <input name="button" maxlength="30" placeholder="e.g. Grab my room"></label>
+          <label>Order of the boxes <select name="order" id="yours-order"></select></label>
+          <button type="submit" class="btn dark">Change the website</button>
+        </form>
+      </details>
       <p class="notice" id="site-notice" role="status"></p>
       <details class="flow">
         <summary>How its pages fit together right now</summary>
@@ -121,18 +135,28 @@
       <p class="card-note">Every booking uses real cloud-browser credits. Past the hourly budget you get a recording instead, labelled as one.</p>
     </section>
 
-    <details class="card read-card" id="read-card">
-      <summary><h3>Read another website</h3><span class="tag">beta</span></summary>
-      <p class="card-note">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the right page and works out how to read it. Read-only, and it respects robots.txt. Allowed: <span id="allowed"></span>.</p>
-      <form id="read-form" autocomplete="off">
-        <input name="url" type="url" placeholder="https://quotes.toscrape.com/" required aria-label="Page URL">
-        <input name="goal" placeholder="the quotes with their author and tags" required minlength="10" maxlength="300" aria-label="What you want">
-        <button type="submit" class="btn dark">Work it out</button>
-      </form>
-      <p class="notice" id="read-notice" role="status"></p>
-    </details>
   </aside>
 </main>
+
+<section class="real" id="real" aria-label="Anvil on real websites">
+  <div class="real-head">
+    <p class="eyebrow">Beyond the demo site</p>
+    <h2>It also works on real websites.</h2>
+    <p>Reading only: doing things on a website you do not own would make real bookings and orders there. Give Anvil a website and one sentence. It checks Anakin's ready-made Wire actions first, otherwise finds the page that holds the data, works out how to read it, and remembers what a correct result looks like.</p>
+  </div>
+  <div class="real-grid" id="real-caps"></div>
+  <form class="real-teach" id="read-form" autocomplete="off">
+    <p class="kicker">Teach it a new website</p>
+    <div class="examples" id="read-examples"></div>
+    <div class="real-inputs">
+      <input name="url" type="url" placeholder="Website address, e.g. https://www.python.org/" required aria-label="Website address">
+      <input name="goal" placeholder="What you want from it, in a sentence" required minlength="10" maxlength="300" aria-label="What you want from it">
+      <button type="submit" class="btn dark">Work it out</button>
+    </div>
+    <p class="card-note">Websites this demo may read: <span id="allowed"></span>. It also respects each website's robots.txt. Working out a new website takes a minute or two.</p>
+    <p class="notice" id="read-notice" role="status"></p>
+  </form>
+</section>
 
 <footer class="deep">
   <div class="deep-inner">

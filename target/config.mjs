@@ -27,6 +27,7 @@ export const BREAKS = {
   'reorder-steps': 'Ask for seats first, on a page of their own',
   'restyle-confirmation': 'Rebuild the confirmation page markup',
   surprise: 'A random change nobody scripted',
+  custom: 'A change the visitor typed in',
 };
 
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
@@ -74,6 +75,47 @@ function surprise(config) {
   return { changed: true, detail: done.join('; ') };
 }
 
+// Custom: whatever a visitor typed, checked only so the site stays a working booking form.
+const TEXT = /^[\p{L}\p{N} ?!.,'’()&:+-]+$/u;
+function custom(config, { field, label, button, order } = {}) {
+  const done = [];
+  const clean = (v, max, what) => {
+    const t = String(v ?? '').replace(/\s+/g, ' ').trim();
+    if (!t) return null;
+    if (t.length > max || !TEXT.test(t)) throw new Error(`${what} can be up to ${max} letters, numbers, spaces and simple punctuation`);
+    return t;
+  };
+  const newLabel = clean(label, 40, 'a label');
+  const newButton = clean(button, 30, 'button text');
+
+  if (newLabel) {
+    const f = config.fields.find((x) => x.key === field);
+    if (!f) throw new Error('pick which box to rename');
+    const base = newLabel.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 24);
+    let name = /^[a-z]/.test(base) ? base : `box_${base}`.replace(/_+$/, '');
+    while (name === 't' || config.fields.some((x) => x !== f && x.name === name)) name = `${name}_${tag()}`;
+    const before = f.name;
+    Object.assign(f, { name, label: newLabel });
+    done.push(before === name ? `the ${f.key} box is now labelled "${newLabel}"` : `the ${f.key} box is now name="${name}", labelled "${newLabel}" (was "${before}")`);
+  }
+  if (newButton && newButton !== config.submitLabel) {
+    config.submitLabel = newButton;
+    done.push(`the button now says "${newButton}"`);
+  }
+  if (order) {
+    const keys = String(order).split(',');
+    const current = config.fields.map((f) => f.key);
+    if (keys.length !== current.length || [...keys].sort().join() !== [...current].sort().join()) throw new Error('the order has to list every box once');
+    if (keys.join() !== current.join()) {
+      config.fields.sort((a, b) => keys.indexOf(a.key) - keys.indexOf(b.key));
+      done.push(`the boxes now come in the order ${config.fields.map((f) => f.label).join(', ')}`);
+    }
+  }
+  if (!done.length) throw new Error('that would not change anything on the site');
+  mark(config, { kind: 'custom', changes: done });
+  return { changed: true, detail: done.join('; ') };
+}
+
 function mark(config, entry) {
   config.version += 1;
   config.breaks.push({ ...entry, at: new Date().toISOString() });
@@ -103,12 +145,13 @@ function toggle(config, kind, flag, detail) {
   return { changed: true, detail };
 }
 
-export function applyBreak(config, kind, key) {
+export function applyBreak(config, kind, key, params) {
   if (kind === 'rename-field') return renameField(config, key);
   if (kind === 'add-step') return toggle(config, kind, 'reviewStep', 'bookings now go through a "check your details" page with its own confirm button');
   if (kind === 'reorder-steps') return toggle(config, kind, 'seatsFirst', 'the form is now two pages, seats first, then name and email');
   if (kind === 'restyle-confirmation') return toggle(config, kind, 'receiptLayout', 'the confirmation page was rebuilt with different markup');
   if (kind === 'surprise') return surprise(config);
+  if (kind === 'custom') return custom(config, params);
   throw new Error(`unknown break kind "${kind}"`);
 }
 
