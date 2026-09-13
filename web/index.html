@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anvil — an agent that repairs its own plan</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="page">
+  <aside class="side">
+    <header class="masthead">
+      <h1>Anvil</h1>
+      <p class="lede">An agent that operates websites. When a site changes under it, it throws its plan away, works out a new one from the live page, and keeps it only if the result still passes the contract it learned the first time.</p>
+    </header>
+
+    <ol class="howto">
+      <li>Run the reservation below. It books a real study room on the demo site.</li>
+      <li>Break the site with one of the buttons.</li>
+      <li>Run it again and watch it fail, repair itself, and book the room.</li>
+    </ol>
+
+    <section class="block" id="capability-block">
+      <label class="field">
+        <span>Capability</span>
+        <select id="capability"></select>
+      </label>
+      <p class="health" id="health"></p>
+      <p class="goal" id="goal"></p>
+      <form id="run-form" autocomplete="off">
+        <div id="inputs"></div>
+        <button type="submit" id="run-button">Run</button>
+        <button type="button" id="repair-button" class="quiet" hidden>Repair now</button>
+      </form>
+      <p class="notice" id="run-notice" role="status"></p>
+    </section>
+
+    <section class="block" id="site-block">
+      <h2>The demo site, right now</h2>
+      <p class="owned" id="owned"></p>
+      <ol class="pages" id="pages"></ol>
+      <div class="breaks" id="breaks"></div>
+      <p class="notice" id="site-notice" role="status"></p>
+    </section>
+
+    <section class="block" id="read-block">
+      <h2>Read another site</h2>
+      <p class="small">Give a page and say what you want from it. Anvil checks Anakin's Wire catalog first, otherwise maps the site, picks the page and derives a plan. Read-only, robots.txt respected, allowlisted sites only: <span id="allowed"></span>.</p>
+      <form id="read-form" autocomplete="off">
+        <label class="field"><span>Page</span><input name="url" type="url" placeholder="https://quotes.toscrape.com/" required></label>
+        <label class="field"><span>What you want</span><input name="goal" placeholder="the quotes with their author and tags" required minlength="10" maxlength="300"></label>
+        <button type="submit">Work it out</button>
+      </form>
+      <p class="notice" id="read-notice" role="status"></p>
+    </section>
+
+    <footer class="colophon">
+      <p>Every run is live: <a href="https://anakin.io">Anakin</a> drives a real browser, reads pages and runs Wire actions, and costs real credits. Past the hourly budget you get a recorded run, and it says so.</p>
+      <p>Plans are derived by free models, so a repair can take a minute. <a href="https://github.com/shivang-goliyan/anvil">Source</a>.</p>
+    </footer>
+  </aside>
+
+  <main class="trace" id="trace" aria-live="polite">
+    <p class="empty" id="empty">Nothing has run yet. The trace of every step, decision and repair shows up here, newest at the bottom.</p>
+  </main>
+</div>
+<script src="/app.js" type="module"></script>
+</body>
+</html>
