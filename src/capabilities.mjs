@@ -72,3 +72,41 @@ export async function seedCapability(def, { reset = false } = {}) {
   await db.capability.update({ where: { id: def.id }, data: { planId: plan.id } });
   return { created: true };
 }
+
+const slug = (s) => s.toLowerCase().replace(/^www\./, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+
+// A Tier A capability starts with no plan. The derive job gives it one.
+export async function createReadCapability({ url, goal, name }) {
+  const host = new URL(url).hostname;
+  const id = `${slug(host)}-${Math.random().toString(36).slice(2, 7)}`;
+  return db.$transaction(async (tx) => {
+    const cap = await tx.capability.create({
+      data: { id, name: name || goal.slice(0, 60), goal, entryUrl: url, targetUrl: url, inputSchema: {}, canary: '', engine: 'scrape', status: 'deriving' },
+    });
+    const derivation = await tx.derivation.create({ data: { capabilityId: id, entryUrl: url } });
+    await tx.job.create({ data: { kind: 'derive', refId: derivation.id } });
+    await tx.traceEvent.create({ data: { derivationId: derivation.id, seq: 1, kind: 'queued', label: `derivation queued for ${url}`, detail: { goal, url } } });
+    return { cap, derivation };
+  });
+}
+
+// First working plan for a capability, with the contract learned from the same result.
+export async function adoptFirstPlan(capId, { engine, targetUrl, canary, steps, origin, contract, snapshot }) {
+  return db.$transaction(async (tx) => {
+    await tx.pageSnapshot.upsert({ where: { hash: snapshot.hash }, create: { hash: snapshot.hash, url: targetUrl, shape: snapshot.shape }, update: {} });
+    const plan = await tx.plan.create({ data: { capabilityId: capId, steps, origin, derivedFrom: snapshot.hash, version: 1, active: true } });
+    const row = await tx.contract.create({
+      data: {
+        capabilityId: capId,
+        goldenSample: { inputs: {}, records: contract.goldenSample },
+        requiredFields: contract.requiredFields,
+        fieldTypes: contract.fieldTypes,
+        minRecords: contract.minRecords,
+        bounds: contract.bounds,
+        echoes: contract.echoes,
+      },
+    });
+    await tx.capability.update({ where: { id: capId }, data: { engine, targetUrl, canary, planId: plan.id, contractId: row.id, status: 'healthy' } });
+    return { plan, contract: row };
+  });
+}

@@ -7,12 +7,43 @@ import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
 import { loadCapability, sessionOptions, learnContract, setStatus } from './capabilities.mjs';
 import { queueRepair, Busy } from './jobs.mjs';
+import { runReadPlan, hasSelector } from './read-plan.mjs';
+import { scrapeFetcher, runWireStep } from './read-engines.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const stepLabel = (i, s) => `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` : s.url ? ` ${s.url}` : s.fields ? ` ${Object.keys(s.fields).join(', ')}` : ''}`;
 
+async function readAttempt(cap, log) {
+  let last = null;
+  const fetchPage = scrapeFetcher(log);
+  try {
+    const result = await runReadPlan(cap.plan, {
+      baseUrl: cap.targetUrl,
+      fetchPage: async (url) => (last = await fetchPage(url)),
+      onStep: (i, s) => log('step', stepLabel(i, s), { index: i, step: s }),
+    });
+    return { result, error: null, canaryPresent: hasSelector(result.finalHtml, cap.canary), pageText: '' };
+  } catch (error) {
+    const html = last?.html ?? '';
+    return { result: null, error, canaryPresent: hasSelector(html, cap.canary), pageText: last?.markdown ?? '', pageAtFailure: html ? pageShape(html).shape : null };
+  }
+}
+
+async function wireAttempt(cap, log) {
+  const step = cap.plan.steps[0];
+  try {
+    const out = await runWireStep(step, { log, siteUrl: cap.targetUrl });
+    // a completed Wire job means the site answered; there is no page to look for a canary on
+    return { result: { records: out.records }, error: null, canaryPresent: true, pageText: '' };
+  } catch (error) {
+    return { result: null, error, canaryPresent: false, pageText: '' };
+  }
+}
+
 async function attempt(cap, inputs, log) {
+  if (cap.engine === 'scrape') return readAttempt(cap, log);
+  if (cap.engine === 'wire') return wireAttempt(cap, log);
   let session;
   try {
     session = await openBrowser({ ...sessionOptions(cap), log });
@@ -118,7 +149,9 @@ export async function executeRun(runId, log) {
 
   if (out.failureKind === 'structural') {
     const fresh = await loadCapability(cap.id);
-    if (!fresh.contract) {
+    if (cap.engine !== 'browser') {
+      log('repair', 'automatic repair is only wired up for browser capabilities so far, so this read capability stays as it is');
+    } else if (!fresh.contract) {
       log('repair', 'no contract yet, so a repaired plan would have nothing to be checked against. Not repairing');
     } else if (fresh.status === 'degraded') {
       log('repair', 'capability is degraded, so it will not auto-repair. A manual repair can still be triggered', { circuitBreaker: true });

@@ -1,13 +1,14 @@
 import { db } from './db.mjs';
 
-// Returns log(kind, label, detail) for one run or repair. Calls can be fired without awaiting;
+// Returns log(kind, label, detail) for one run, repair or derivation. Calls can be fired without awaiting;
 // they are numbered on the spot and written in order. await log.flush() before finishing up.
 export async function tracer(owner, { echo = true } = {}) {
-  const where = owner.runId ? { runId: owner.runId } : { repairId: owner.repairId };
+  const where = owner.runId ? { runId: owner.runId } : owner.repairId ? { repairId: owner.repairId } : { derivationId: owner.derivationId };
   const last = await db.traceEvent.findFirst({ where, orderBy: { seq: 'desc' }, select: { seq: true } });
   let seq = last?.seq ?? 0;
   let chain = Promise.resolve();
-  const tag = owner.runId ? `run ${owner.runId.slice(-6)}` : `repair ${owner.repairId.slice(-6)}`;
+  const [ownerKind, ownerId] = Object.entries(where)[0];
+  const tag = `${ownerKind.replace('Id', '')} ${ownerId.slice(-6)}`;
 
   const log = (kind, label, detail) => {
     const n = ++seq;

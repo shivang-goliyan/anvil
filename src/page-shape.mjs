@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { parse } from 'node-html-parser';
+import { parse, TextNode } from 'node-html-parser';
 
 const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
@@ -41,6 +41,43 @@ export function formMarkup(html, limit = 6000) {
   const forms = root.querySelectorAll('form');
   const chunk = forms.length ? forms.map((f) => f.outerHTML).join('\n') : (root.querySelector('main') ?? root).outerHTML;
   return chunk.replace(/\s{2,}/g, ' ').slice(0, limit);
+}
+
+const KEEP_ATTRS = new Set(['id', 'class', 'href', 'title', 'alt', 'itemprop', 'role', 'aria-label', 'datetime', 'name', 'data-testid']);
+const DROP_TAGS = 'script, style, noscript, svg, iframe, link, meta, template, head';
+
+// The body with scripts, styles and most attributes gone, long text clipped, and long runs of
+// look-alike siblings cut to three. Enough for a model to write selectors against.
+export function compactHtml(html, limit = 24000) {
+  const root = parse(html, { comment: false });
+  for (const el of root.querySelectorAll(DROP_TAGS)) el.remove();
+  const body = root.querySelector('body') ?? root;
+
+  const walk = (el) => {
+    if (el.attributes) {
+      for (const name of Object.keys(el.attributes)) {
+        if (!KEEP_ATTRS.has(name.toLowerCase())) el.removeAttribute(name);
+        else if (name === 'href' && el.getAttribute('href').length > 80) el.setAttribute('href', `${el.getAttribute('href').slice(0, 80)}…`);
+      }
+    }
+    const kids = (el.childNodes ?? []).filter((n) => n.nodeType === 1);
+    const seen = new Map();
+    for (const kid of kids) {
+      const cls = (kid.getAttribute('class') ?? '').trim().split(/\s+/).filter(Boolean).join('.');
+      const sig = `${kid.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
+      const n = (seen.get(sig) ?? 0) + 1;
+      seen.set(sig, n);
+      if (n > 3) kid.remove();
+      else walk(kid);
+    }
+    for (const [sig, n] of seen) if (n > 3) el.appendChild(new TextNode(` [${n - 3} more ${sig} like the ones above] `, el));
+  };
+  walk(body);
+
+  return body.toString()
+    .replace(/>([^<]{160,})</g, (_, t) => `>${t.replace(/\s+/g, ' ').slice(0, 120)}…<`)
+    .replace(/\s{2,}/g, ' ')
+    .slice(0, limit);
 }
 
 export function diffShapes(before, after) {
