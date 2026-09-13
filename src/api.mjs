@@ -9,6 +9,7 @@ import { createReadCapability, seedCapability } from './capabilities.mjs';
 import { onAllowlist, allowedSites } from './conduct.mjs';
 import { creditsUsed, hourlyCap } from './budget.mjs';
 import { reserveRoom } from '../capabilities/reserve-room.mjs';
+import { SHOTS, SHOT_NAME } from './shots.mjs';
 
 const PORT = Number(process.env.PORT ?? 3310);
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -148,6 +149,32 @@ const routes = [
     },
   ],
   ['GET', /^\/api\/budget$/, async (req, res) => send(res, 200, await budget())],
+  [
+    'GET',
+    /^\/api\/(demo\/)?shots\/([^/]+)$/,
+    async (req, res, [demo, name]) => {
+      const jpg = SHOT_NAME.test(name) && (await readFile(demo ? new URL(`shots/${name}`, DEMO) : SHOTS + name).catch(() => null));
+      if (!jpg) return send(res, 404, { error: 'no screenshot by that name, old ones get cleared out' });
+      res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=86400, immutable' });
+      return res.end(jpg);
+    },
+  ],
+  [
+    // Caddy serves this read-only view in production. Same thing here, for running it locally.
+    'GET',
+    /^\/harbor-lane(\/.*)?$/,
+    async (req, res, [path = '/'], url) => {
+      // set the path on a URL for the demo site itself, so "//somewhere-else" cannot change the host
+      const to = new URL(TARGET_ADMIN);
+      to.pathname = path;
+      to.search = url.search;
+      if (/^\/+_admin/.test(to.pathname)) return send(res, 404, { error: 'nothing here' });
+      const page = await fetch(to, { redirect: 'manual' }).catch(() => null);
+      if (!page) return send(res, 502, { error: 'the demo site is not answering' });
+      res.writeHead(page.status, { 'content-type': page.headers.get('content-type') ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      return res.end(Buffer.from(await page.arrayBuffer()));
+    },
+  ],
   [
     'GET',
     /^\/api\/demo$/,

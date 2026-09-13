@@ -13,14 +13,15 @@ A plan is {"steps": [...]} where each step is one of:
 Rules:
 - Use only selectors that exist in the markup you are given. Prefer [name="..."] or #id for form controls.
 - A flow can span several pages. Every submit leads to the next page; the step after it must use selectors from that page.
-  You are shown the entry page, the page where the old plan got stuck, and, after a rejected attempt, the page where that attempt got stuck.
-  For a page you have not been shown, keep the previous plan's selectors.
+  You are shown the entry page and every other page seen so far (where the old plan and earlier attempts got stuck).
+  Use the selectors on those pages. Only for a page you have not been shown, keep the previous plan's selectors.
+- Do not repeat a plan that an earlier attempt already showed to fail.
 - Fill values must be {{inputKey}} placeholders using the input keys provided, never literal data.
 - The extract step must produce exactly the output fields listed, with the listed types, from the final page.
 - If a previous plan is given, keep every step that still matches and change only what the site change broke.
 - Respond with the JSON object only.`;
 
-export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, stuckOn, changes, shape, markup, feedback }) {
+export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, pages = [], changes, shape, markup, rejections = [] }) {
   const prompt = [
     `GOAL\n${goal}`,
     `ENTRY URL\n${entryUrl}`,
@@ -28,11 +29,11 @@ export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, prev
     `OUTPUT FIELDS (name: type)\n${Object.entries(outputFields).map(([k, t]) => `${k}: ${t}`).join('\n')}`,
     previousPlan && `PREVIOUS PLAN (worked before the site changed)\n${JSON.stringify(previousPlan.steps, null, 1)}`,
     failure && `HOW IT FAILED\n${failure}`,
-    stuckOn?.html && `THE PAGE THE OLD PLAN GOT STUCK ON (${stuckOn.url}, trimmed)\n${stuckOn.html}`,
+    ...pages.map((p) => `A PAGE SEEN WHILE RUNNING (${p.url}, trimmed)\n${p.html}`),
     changes?.length && `WHAT CHANGED ON THE ENTRY PAGE SINCE THE PREVIOUS PLAN WAS MADE\n- ${changes.join('\n- ')}`,
     `ENTRY PAGE STRUCTURE (live)\n${JSON.stringify(shape)}`,
     `ENTRY PAGE FORM MARKUP (live, trimmed)\n${markup}`,
-    feedback && `YOUR LAST ATTEMPT WAS REJECTED\n${feedback}`,
+    rejections.length && `EARLIER ATTEMPTS THAT FAILED, DO NOT REPEAT THEM\n- ${rejections.join('\n- ')}`,
   ]
     .filter(Boolean)
     .join('\n\n');

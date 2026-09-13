@@ -3,8 +3,9 @@
 //
 //   node --env-file=.env scripts/record-demo.mjs [repairId] ["what was changed on the site"]
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { db } from '../src/db.mjs';
+import { SHOTS, SHOT_NAME } from '../src/shots.mjs';
 
 const pick = { seq: true, kind: true, label: true, detail: true, createdAt: true };
 
@@ -43,7 +44,23 @@ jobs.push({
 });
 if (after) jobs.push(await runJob(after, 'And the next run on the repaired plan:'));
 
+// screenshots in state/ get cleared out over time, so the recording keeps its own copies
+await mkdir(new URL('../demo/shots/', import.meta.url), { recursive: true });
+let copied = 0;
+for (const e of jobs.flatMap((j) => j.trace)) {
+  const name = e.kind === 'shot' && e.detail?.src?.split('/').pop();
+  if (!name || !SHOT_NAME.test(name)) continue;
+  try {
+    await copyFile(SHOTS + name, new URL(`../demo/shots/${name}`, import.meta.url));
+    e.detail = { ...e.detail, src: `/api/demo/shots/${name}` };
+    copied++;
+  } catch {
+    e.kind = 'shot-missing';
+  }
+}
+
 const out = { recordedAt: (before ?? failed).createdAt, capability: cap.name, jobs };
+console.log(`kept ${copied} screenshots with the recording`);
 await mkdir(new URL('../demo/', import.meta.url), { recursive: true });
 await writeFile(new URL('../demo/recorded.json', import.meta.url), JSON.stringify(out, null, 1));
 console.log(`recorded ${jobs.length} jobs (${jobs.reduce((n, j) => n + j.trace.length, 0)} trace events) from ${out.recordedAt.toISOString()} into demo/recorded.json`);

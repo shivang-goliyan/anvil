@@ -94,6 +94,7 @@ export function diffShapes(before, after) {
     const b = after.forms[i];
     if (!a || !b) continue;
     const where = `form ${b.id ? `#${b.id}` : i + 1}`;
+    if (a.id !== b.id) changes.push(`form id changed from "${a.id ?? 'none'}" to "${b.id ?? 'none'}"`);
     if (a.action !== b.action) changes.push(`${where}: action changed from "${a.action}" to "${b.action}"`);
 
     const oldNames = new Set(a.fields.map((f) => f.name));

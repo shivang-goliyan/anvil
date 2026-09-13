@@ -163,6 +163,8 @@ export async function openBrowser({ origin, forward, log } = {}) {
   log?.('anakin', `browser session opened, 1 credit (${await creditsUsed()}/${hourlyCap()} this hour)`, { call: 'browser', credits: 1 });
   const context = browser.contexts()[0] ?? (await browser.newContext());
   const page = context.pages()[0] ?? (await context.newPage());
+  // the remote default window is very large, which leaves screenshots mostly empty
+  await Promise.race([page.setViewportSize({ width: 1000, height: 660 }), new Promise((r) => setTimeout(r, 5000))]).catch(() => {});
 
   if (forward && origin) {
     await context.route(`${origin}/**`, async (route) => {
@@ -190,13 +192,31 @@ export async function openBrowser({ origin, forward, log } = {}) {
     if (r.request().isNavigationRequest() && r.frame() === page.mainFrame()) lastDocStatus = r.status();
   });
 
+  // A connection that drops without closing leaves every browser call waiting forever (seen
+  // 2026-09-13: a run sat 8 minutes on one step). So the slow or untimed calls get a deadline,
+  // and once one misses it the session counts as gone.
+  let dead = false;
+  const gone = (what, ms) => new AnakinError(`the remote browser stopped answering (${what}${ms ? `, nothing back in ${ms / 1000}s` : ''})`, { code: 'network' });
+
   const started = Date.now();
   return {
     browser,
     page,
     docStatus: () => lastDocStatus,
+    within(ms, promise, what) {
+      promise.catch?.(() => {});
+      if (dead) return Promise.reject(gone(what));
+      let t;
+      const timer = new Promise((_, reject) => {
+        t = setTimeout(() => {
+          dead = true;
+          reject(gone(what, ms));
+        }, ms);
+      });
+      return Promise.race([promise, timer]).finally(() => clearTimeout(t));
+    },
     async close() {
-      await browser.close().catch(() => {});
+      await Promise.race([browser.close().catch(() => {}), new Promise((r) => setTimeout(r, dead ? 0 : 10_000))]);
       const ms = Date.now() - started;
       // billed per started 2 minutes, the first one was recorded on connect
       const extra = Math.ceil(ms / 120_000) - 1;

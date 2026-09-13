@@ -6,9 +6,12 @@ import { derivePlan } from './derive.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
 import { loadCapability, sessionOptions, setStatus, promotePlan } from './capabilities.mjs';
+import { shooter } from './shots.mjs';
 
 const MAX_ATTEMPTS = 3;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Anakin's browser can go away under a long attempt; that is infrastructure, not a bad plan
+const SESSION_GONE = /Target page, context or browser has been closed|browser has disconnected|Browser closed|WebSocket is not open|session ended|stopped answering/i;
 
 async function readEntryPage(cap, session, log) {
   if (!sessionOptions(cap).forward) {
@@ -19,7 +22,7 @@ async function readEntryPage(cap, session, log) {
     return { html: r.html, via: `url scraper (cached=${r.cached})` };
   }
   await session.page.goto(cap.targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  return { html: await session.page.content(), via: 'browser session (target not public yet)' };
+  return { html: await session.within(10_000, session.page.content(), 'reading the entry page'), via: 'browser session (target not public yet)' };
 }
 
 // Replace a broken plan. Promotes only on a passing contract, otherwise rolls back and degrades.
@@ -49,10 +52,17 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   log('repair', `repair started (${rec.trigger}), setting plan v${previous.version} aside`, { fromPlanId: previous.id, failure: failure ?? null });
   log('health', 'capability marked repairing', { status: 'repairing' });
 
-  let feedback = null;
   let changes = [];
   let ending = null;
   const rejections = [];
+  // Every page any attempt has seen, so a later attempt never forgets a page an earlier one found.
+  const pages = new Map();
+  if (stuckOn?.html) pages.set(stuckOn.url, stuckOn.html);
+  const remember = async (session) => {
+    const html = await session.within(5000, session.page.content(), 'reading the page').catch(() => '');
+    if (html) pages.set(session.page.url(), compactHtml(html, 8000));
+    return html;
+  };
   for (let n = 1; n <= MAX_ATTEMPTS && !ending; n++) {
     if (n > 1) {
       const wait = 2000 * 2 ** (n - 2);
@@ -80,11 +90,11 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
           outputFields: cap.contract.fieldTypes,
           previousPlan: previous,
           failure,
-          stuckOn,
+          pages: [...pages].slice(-4).map(([url, html]) => ({ url, html })),
           changes,
           shape: now.shape,
           markup: formMarkup(live.html),
-          feedback,
+          rejections,
         });
       } finally {
         stopKeepAlive();
@@ -94,34 +104,50 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
 
       const shapeProblems = checkPlanShape(derived.plan, { outputFields: Object.keys(cap.contract.fieldTypes), inputKeys: Object.keys(cap.inputSchema) });
       if (shapeProblems.length) {
-        feedback = `The plan was not runnable: ${shapeProblems.join('; ')}`;
-        rejections.push(`attempt ${n}: ${shapeProblems.join('; ')}`);
-        log('reject', feedback, { problems: shapeProblems, steps: derived.plan.steps ?? null });
+        rejections.push(`attempt ${n} was not runnable: ${shapeProblems.join('; ')}`);
+        log('reject', `The plan was not runnable: ${shapeProblems.join('; ')}`, { problems: shapeProblems, steps: derived.plan.steps ?? null });
         continue;
       }
       log('plan', `candidate plan has ${derived.plan.steps.length} steps`, { steps: derived.plan.steps });
 
+      const execute = () => {
+        const snap = shooter(session, log);
+        return session.within(
+          120_000,
+          runPlan(derived.plan, inputs, session, {
+            baseUrl: cap.targetUrl,
+            onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.selector ?? s.url ?? Object.keys(s.fields ?? {}).join(', ')}`, { index: i, step: s }),
+            beforePress: (i, s) => snap(`page before step ${i + 1}`, { index: i, kind: s.kind }),
+          }),
+          'running the candidate plan',
+        );
+      };
       let result;
       try {
-        result = await runPlan(derived.plan, inputs, session, {
-          baseUrl: cap.targetUrl,
-          onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.selector ?? s.url ?? Object.keys(s.fields ?? {}).join(', ')}`, { index: i, step: s }),
-        });
+        try {
+          result = await execute();
+        } catch (err) {
+          if (!SESSION_GONE.test(err.message)) throw err;
+          log('browser', 'the remote browser went away mid-attempt, opening a new one and running the same plan again');
+          await session.close();
+          session = await openBrowser({ ...sessionOptions(cap), log });
+          result = await execute();
+        }
       } catch (err) {
-        const html = await session.page.content().catch(() => '');
-        const then = pageShape(html).shape;
-        // the next attempt needs to see the page it got stuck on, including pages past the entry page
-        feedback = `Running it failed: ${err.message}. It was on ${session.page.url()}, which looks like this:\n${compactHtml(html, 8000)}`;
-        rejections.push(`attempt ${n}: ${err.message}`);
-        log('execute', `candidate plan failed: ${err.message}`, { url: err.url ?? null, docStatus: err.docStatus ?? null, pageAtFailure: then });
+        // reopening the browser can hit the credit cap; that ends the repair, it is not a bad plan
+        if (err instanceof OverBudget) throw err;
+        await shooter(session, log)('page where it got stuck', { index: err.index ?? null, stuck: true });
+        const html = await remember(session);
+        rejections.push(`attempt ${n} got stuck on ${session.page.url()}: ${err.message}`);
+        log('execute', `candidate plan failed: ${err.message}`, { url: err.url ?? null, docStatus: err.docStatus ?? null, pageAtFailure: pageShape(html).shape });
         continue;
       }
 
       const check = checkContract(cap.contract, result.records, inputs);
       log('validate', check.pass ? 'contract passed' : `contract failed: ${check.problems.join('; ')}`, { records: result.records, problems: check.problems });
       if (!check.pass) {
-        feedback = `It ran, but the result broke the contract: ${check.problems.join('; ')}. Result was ${JSON.stringify(result.records)}`;
-        rejections.push(`attempt ${n}: ${check.problems.join('; ')}`);
+        await remember(session);
+        rejections.push(`attempt ${n} ran, but the result broke the contract: ${check.problems.join('; ')}. It read ${JSON.stringify(result.records)}`);
         continue;
       }
 
@@ -135,7 +161,6 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
         log('budget', `${err.message}. Stopping the repair and leaving plan v${previous.version} in place`, { used: err.used ?? null, cap: err.cap ?? null, modelQuota: !!err.quota });
         ending = ['capped', { diagnosis: err.message }];
       } else {
-        feedback = `Attempt crashed: ${err.message}`;
         rejections.push(`attempt ${n} crashed: ${err.message}`);
         log('error', `attempt ${n} crashed: ${err.message}`);
       }

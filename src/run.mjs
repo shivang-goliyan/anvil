@@ -8,9 +8,12 @@ import { db } from './db.mjs';
 import { loadCapability, sessionOptions, learnContract, setStatus } from './capabilities.mjs';
 import { queueRepair, Busy } from './jobs.mjs';
 import { runReadPlan, hasSelector } from './read-plan.mjs';
+import { shooter } from './shots.mjs';
 import { scrapeFetcher, runWireStep } from './read-engines.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// a healthy booking takes about 10s; every step inside has its own shorter timeout too
+const PLAN_DEADLINE = 120_000;
 
 const stepLabel = (i, s) => `${i + 1}. ${s.kind}${s.selector ? ` ${s.selector}` : s.url ? ` ${s.url}` : s.fields ? ` ${Object.keys(s.fields).join(', ')}` : ''}`;
 
@@ -53,19 +56,23 @@ async function attempt(cap, inputs, log) {
   }
   let result = null;
   let error = null;
+  const snap = shooter(session, log);
   try {
     try {
-      result = await runPlan(cap.plan, inputs, session, {
+      const plan = runPlan(cap.plan, inputs, session, {
         baseUrl: cap.targetUrl,
         onStep: (i, s) => log('step', stepLabel(i, s), { index: i, step: s }),
+        beforePress: (i, s) => snap(`page before step ${i + 1}`, { index: i, kind: s.kind }),
       });
+      result = await session.within(PLAN_DEADLINE, plan, 'running the plan');
     } catch (err) {
       error = err;
+      await snap('page where it got stuck', { index: err.index ?? null, stuck: true });
     }
-    const canaryPresent = (await session.page.locator(cap.canary).count().catch(() => 0)) > 0;
-    const pageText = error ? await session.page.innerText('body').catch(() => '') : '';
+    const canaryPresent = (await session.within(5000, session.page.locator(cap.canary).count(), 'looking for the page canary').catch(() => 0)) > 0;
+    const pageText = error ? await session.within(5000, session.page.innerText('body'), 'reading the page text').catch(() => '') : '';
     // structure only in the trace; the trimmed markup goes to the repair job, never to the UI
-    const failedHtml = error ? await session.page.content().catch(() => '') : '';
+    const failedHtml = error ? await session.within(5000, session.page.content(), 'reading the page').catch(() => '') : '';
     const pageAtFailure = error ? pageShape(failedHtml).shape : null;
     const stuckOn = error ? { url: session.page.url(), html: compactHtml(failedHtml, 8000) } : null;
     return { result, error, canaryPresent, pageText, pageAtFailure, stuckOn };

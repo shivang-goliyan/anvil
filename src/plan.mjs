@@ -39,7 +39,7 @@ function coerce(raw, type) {
   return v === '' ? null : v;
 }
 
-export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {} } = {}) {
+export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {}, beforePress = async () => {} } = {}) {
   const { page } = session;
   const records = [];
   let entryHtml = null;
@@ -55,6 +55,8 @@ export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {
       });
 
     onStep(index, step);
+    // the moments worth a picture: a filled-in page just before it is sent, and the page a result is read from
+    if (['click', 'submit', 'extract'].includes(step.kind)) await beforePress(index, step);
     try {
       if (step.kind === 'navigate') {
         const url = new URL(step.url, baseUrl).toString();
