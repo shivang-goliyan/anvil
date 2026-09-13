@@ -95,7 +95,8 @@ async function askOne({ system, prompt, model, timeoutMs, apiKey }) {
     const message = body.error?.message ?? res.statusText;
     throw new LlmError(`model call failed (${status}): ${message}`, {
       status,
-      retryable: status === 429 || status >= 500,
+      // 402 is a paid model on an account with no credit left: move on to the next model
+      retryable: status === 429 || status === 402 || status >= 500,
       quota: status === 429 && /per-day|per day/i.test(message),
     });
   }
