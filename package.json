@@ -1,0 +1,12 @@
+{
+  "name": "anvil",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check:anakin": "node --env-file=.env scripts/check-anakin.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
