@@ -33,14 +33,15 @@ export function cleanInputs(schema, raw) {
 
 // One active run per capability. The worker does one thing at a time anyway, and this keeps
 // a shared demo from piling up a queue of credit-burning runs.
-export async function queueRun(capabilityId, inputs) {
+// afterRepair: the one real run a repair asks for, which must not start another repair if it fails
+export async function queueRun(capabilityId, inputs, { afterRepair = null } = {}) {
   const busy = await db.run.findFirst({ where: { capabilityId, status: ACTIVE_RUN }, select: { id: true } });
   if (busy) throw new Busy('a run for this capability is already in progress', { runId: busy.id });
 
   return db.$transaction(async (tx) => {
     const run = await tx.run.create({ data: { capabilityId, inputs } });
-    await tx.job.create({ data: { kind: 'run', refId: run.id } });
-    await tx.traceEvent.create({ data: { runId: run.id, seq: 1, kind: 'queued', label: 'run queued, waiting for the worker', detail: { inputs } } });
+    await tx.job.create({ data: { kind: 'run', refId: run.id, ...(afterRepair && { payload: { afterRepair } }) } });
+    await tx.traceEvent.create({ data: { runId: run.id, seq: 1, kind: 'queued', label: 'run queued, waiting for the worker', detail: { inputs, afterRepair } } });
     return run;
   });
 }

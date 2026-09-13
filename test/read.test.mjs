@@ -55,3 +55,10 @@ test('compact html trims repeats', () => {
   assert.match(out, /7 more li\.row/);
   assert.doesNotMatch(out, /script|onclick/);
 });
+
+test('compact html keeps detail rows', () => {
+  const rows = ['name', 'email', 'seats', 'room', 'date', 'time', 'reference'].map((k) => `<div class="receipt-row"><span class="v" data-field="${k}">x</span></div>`).join('');
+  const out = compactHtml(`<body><section>${rows}</section></body>`);
+  assert.equal((out.match(/receipt-row/g) ?? []).length, 7);
+  assert.match(out, /data-field="time"/);
+});

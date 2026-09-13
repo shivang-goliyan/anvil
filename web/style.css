@@ -149,8 +149,14 @@ h1 em::after {
   border: 0; border-bottom: 2px solid var(--line); background: transparent; border-radius: 0;
   font: 600 22px var(--body); letter-spacing: -0.02em; color: var(--blue); transition: border-color 0.15s;
 }
-.sentence input:hover { border-color: #cfcfd6; }
-.sentence input:focus { outline: none; border-color: var(--blue); }
+.sentence select {
+  display: inline-block; max-width: 100%; padding: 0 2px; margin: 0 2px; appearance: none; -webkit-appearance: none; cursor: pointer;
+  border: 0; border-bottom: 2px solid var(--line); background: transparent; border-radius: 0;
+  font: 600 22px var(--body); letter-spacing: -0.02em; color: var(--blue); transition: border-color 0.15s;
+}
+.sentence input[type='date'] { width: 7.9em; }
+.sentence input:hover, .sentence select:hover { border-color: #cfcfd6; }
+.sentence input:focus, .sentence select:focus { outline: none; border-color: var(--blue); }
 .sentence input[type='number'] { width: 2.4ch; text-align: center; -moz-appearance: textfield; }
 .sentence input::-webkit-inner-spin-button { display: none; }
 .sentence .quiet { color: var(--faint); font-size: 16px; display: block; line-height: 1.5; margin-top: 6px; }
@@ -580,7 +586,7 @@ h1 em::after {
   .hero { padding: 36px 16px 28px; }
   .lede { font-size: 17px; }
   .composer { padding: 22px 20px 20px; border-radius: 24px; }
-  .sentence, .sentence input { font-size: 19px; }
+  .sentence, .sentence input, .sentence select { font-size: 19px; }
   .stage { padding: 8px 16px 64px; }
   .job { padding: 18px; border-radius: 20px; }
   .breaks { grid-template-columns: 1fr; }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Anvil — a web agent that repairs itself when sites change</title>
-<meta name="description" content="Anvil books rooms on a real website through a cloud browser. Change that website and watch Anvil notice, work out new steps from the live page, and prove the fix with a real booking.">
+<meta name="description" content="Anvil books rooms on a real website through a cloud browser. Change that website and watch Anvil notice, work out new steps from the live page, rehearse them without booking, and check the result against the library's own records.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,7 +37,7 @@
     <h1>Websites change.<br><em>Anvil repairs itself.</em></h1>
   </div>
   <div class="hero-copy">
-    <p class="lede">Anvil is an agent that uses websites the way a person does. It opens the page, types, presses buttons and reads what comes back. When the website changes under it, Anvil notices, works out new steps from the live page, and keeps them only once a real result proves they work.</p>
+    <p class="lede">Anvil is an agent that uses websites the way a person does. It opens the page, types, presses buttons and reads what comes back. When the website changes under it, Anvil notices, works out new steps from the live page, rehearses them without booking anything, and keeps them only once they pass the same check as its first good booking.</p>
     <p class="lede small">Here it books study rooms on a small library website. You get to change that website, and see what Anvil does about it.</p>
   </div>
 
@@ -48,7 +48,7 @@
       <button type="submit" class="btn blue big" id="run-button">Send Anvil to book it <span aria-hidden="true">→</span></button>
       <button type="button" class="btn outline" id="repair-button" hidden>Ask it to repair now</button>
     </div>
-    <p class="composer-hint" id="composer-hint">A real browser in the cloud opens the library's booking page, fills it in and presses the button. About 15 seconds.</p>
+    <p class="composer-hint" id="composer-hint">A real browser in the cloud opens the library's booking page, fills it in, presses the button, then checks the library's own records. About 20 seconds.</p>
     <p class="notice" id="run-notice" role="status"></p>
   </form>
 </section>
@@ -63,13 +63,13 @@
   <article>
     <p class="kicker"><i>B</i>Anvil's job</p>
     <h3>Book a room, like a person would</h3>
-    <p>Anvil drives a real cloud browser through Anakin: it opens the booking page, types the name, email and number of seats, presses the button, and reads the booking reference off the confirmation page.</p>
+    <p>Anvil drives a real cloud browser through Anakin: it picks the room, date and time, types the name, email and number of seats, presses the button, reads the confirmation, then looks the booking up on the library's own “Find my booking” page to check what was really stored.</p>
     <a class="more" href="#real">It also reads real websites <span aria-hidden="true">↓</span></a>
   </article>
   <article>
     <p class="kicker"><i>C</i>The twist</p>
     <h3>You change the website</h3>
-    <p>Rename a box, add a page, let the site scramble itself at random, or type your own change. Anvil's saved steps stop fitting, and nobody tells it what changed. Watch it work that out and prove the fix with a real booking.</p>
+    <p>Rename a box, add a page, let the site scramble itself at random, or type your own change. Anvil's saved steps stop fitting, and nobody tells it what changed. Watch it work that out, rehearse the fix without booking, then make one real booking. Or make the site quietly book the wrong room, and watch Anvil catch it.</p>
   </article>
 </section>
 
@@ -165,7 +165,7 @@
     <div class="pillars">
       <article><b>01</b><h4>Triage first</h4><p>A network blip is retried, a bot block is reported, an empty page is fine. Only a real structural change triggers a repair.</p></article>
       <article><b>02</b><h4>Whole-plan repair</h4><p>The model sees the goal, the old plan, what changed, and every page an attempt got stuck on, then writes every step again.</p></article>
-      <article><b>03</b><h4>Contract gate</h4><p>The first good run teaches types, bounds and echoes. A new plan is promoted only if its result passes. Three failures roll back, honestly.</p></article>
+      <article><b>03</b><h4>Rehearse, then check</h4><p>Repairs fill everything in and stop before the button that books, then test the reading steps on a booking that already exists. The first good run teaches a check: what must echo the inputs, and what the site's own records must agree with. Details like a reference format may change and are learned; three failures roll back, honestly.</p></article>
       <article><b>04</b><h4>Before anything fails</h4><p>Anakin Website Monitoring watches the site. When it changes, a signed webhook starts the repair before anyone's run breaks.</p></article>
     </div>
     <div class="built">

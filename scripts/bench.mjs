@@ -19,7 +19,7 @@ const flag = (name, fallback) => {
 const repeat = Number(flag('--repeat', 1));
 const jsonOut = flag('--json', null);
 const CUSTOM = { kind: 'custom', field: 'email', label: 'Where should we write?', button: 'Grab my room' };
-const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
+const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,wrong-room,new-reference-format,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const dir = mkdtempSync(`${tmpdir()}/anvil-bench-`);
@@ -67,19 +67,24 @@ for (let i = 0; ; i++) {
 }
 
 const people = [
-  { name: 'Priya Raman', email: 'priya.raman@example.com', seats: 3 },
-  { name: 'Tomas Ortega', email: 'tomas.ortega@example.com', seats: 5 },
+  { name: 'Priya Raman', email: 'priya.raman@example.com', seats: 3, room: 'Quiet room', date: '2026-09-21', time: '11:00' },
+  { name: 'Tomas Ortega', email: 'tomas.ortega@example.com', seats: 5, room: 'Group room', date: '2026-09-22', time: '14:00' },
 ];
 let turn = 0;
-async function book() {
-  const q = await call('POST', '/api/runs', { capabilityId: 'reserve-room', inputs: people[turn++ % 2] });
-  if (q.status !== 202) return { status: `refused ${q.status}`, why: q.json.error };
+async function waitRun(id) {
   for (;;) {
-    const { json } = await call('GET', `/api/runs/${q.json.id}`);
-    if (!['queued', 'running'].includes(json.run.status)) return { ...json.run, repairId: json.run.result?.repairId };
+    const { json } = await call('GET', `/api/runs/${id}`);
+    if (!['queued', 'running'].includes(json.run.status))
+      return { ...json.run, repairId: json.run.result?.repairId, amended: json.trace.some((e) => e.label.startsWith('check updated')) };
     await sleep(700);
   }
 }
+async function book() {
+  const q = await call('POST', '/api/runs', { capabilityId: 'reserve-room', inputs: people[turn++ % 2] });
+  if (q.status !== 202) return { status: `refused ${q.status}`, why: q.json.error };
+  return waitRun(q.json.id);
+}
+const bookings = async () => (await (await fetch(`http://127.0.0.1:${ports.target}/_admin/stats`, { headers: { 'x-admin-token': 'bench-token' } })).json()).bookings;
 async function waitRepair(id) {
   const t = Date.now();
   for (;;) {
@@ -87,7 +92,10 @@ async function waitRepair(id) {
     if (!['queued', 'running'].includes(json.repair.outcome)) {
       const tries = json.trace.filter((e) => e.kind === 'attempt').length;
       const models = json.trace.filter((e) => e.kind === 'derive' && e.detail?.model).map((e) => e.detail.model);
-      return { outcome: json.repair.outcome, tries, seconds: Math.round((Date.now() - t) / 1000), models, diagnosis: json.repair.diagnosis };
+      const retryRun = json.trace.find((e) => e.kind === 'retry' && e.detail?.runId && e.label.startsWith('now making'))?.detail.runId;
+      const during = json.trace.find((e) => e.kind === 'ledger')?.detail.during ?? null;
+      const why = json.trace.filter((e) => ['reject', 'execute', 'rehearse', 'validate', 'error'].includes(e.kind)).map((e) => `    ${e.kind}: ${e.label.slice(0, 400)}`);
+      return { why, outcome: json.repair.outcome, tries, seconds: Math.round((Date.now() - t) / 1000), models, diagnosis: json.repair.diagnosis, retryRun, during };
     }
     await sleep(1000);
   }
@@ -96,7 +104,7 @@ async function waitRepair(id) {
 const results = [];
 const t0 = Date.now();
 for (const kind of cases) {
-  const row = { kind, first: '-', broken: '-', repair: '-', tries: 0, seconds: 0, after: '-', note: '' };
+  const row = { kind, first: '-', broken: '-', repair: '-', tries: 0, seconds: 0, retry: '-', during: '-', after: '-', note: '' };
   results.push(row);
   await call('POST', '/api/target/reset', {});
   row.first = (await book()).status;
@@ -106,13 +114,27 @@ for (const kind of cases) {
   row.broken = broken.failureKind ? `${broken.status}/${broken.failureKind}` : broken.status;
   if (broken.repairId) {
     const r = await waitRepair(broken.repairId);
-    Object.assign(row, { repair: r.outcome, tries: r.tries, seconds: r.seconds, models: r.models });
-    if (r.outcome === 'repaired') row.after = (await book()).status;
-    else row.note = String(r.diagnosis ?? '').slice(0, 120);
+    Object.assign(row, { why: r.why, repair: r.outcome, tries: r.tries, seconds: r.seconds, models: r.models, during: r.during ?? '?' });
+    if (r.outcome === 'repaired') {
+      if (r.retryRun) row.retry = (await waitRun(r.retryRun)).status;
+      row.after = (await book()).status;
+    } else row.note = String(r.diagnosis ?? '').slice(0, 120);
+  } else if (broken.status === 'succeeded') {
+    row.amended = broken.amended;
+    row.after = (await book()).status;
   }
-  const ok = row.first === 'succeeded' && (row.after === 'succeeded' || row.broken === 'succeeded');
-  console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(21)} first ${row.first.padEnd(9)} changed ${String(row.broken).padEnd(17)} repair ${String(row.repair).padEnd(9)} tries ${row.tries} ${String(row.seconds).padStart(3)}s  after ${row.after}  ${row.note}`);
+  row.bookings = await bookings();
+  let ok = row.first === 'succeeded';
+  // the site booked the wrong room: caught, and not "repaired" into looking fine
+  if (kind === 'wrong-room') ok &&= row.broken === 'failed/mismatch' && row.repair === '-';
+  else if (kind === 'new-reference-format') ok &&= row.broken === 'succeeded' && row.amended && row.after === 'succeeded';
+  // a repair may not book anything itself, and the one retry booking has to go through
+  else ok &&= row.repair === 'repaired' && row.during === 0 && ['succeeded', '-'].includes(row.retry) && row.after === 'succeeded';
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(21)} first ${row.first.padEnd(9)} changed ${String(row.broken).padEnd(17)} repair ${String(row.repair).padEnd(9)} tries ${row.tries} ${String(row.seconds).padStart(3)}s  booked-while-repairing ${row.during}  retry ${row.retry}  after ${row.after}${row.amended ? '  (check updated)' : ''}  ${row.note}`,
+  );
   row.pass = ok;
+  if (!ok && row.why?.length) console.log(row.why.join('\n'));
 }
 
 const passed = results.filter((r) => r.pass).length;

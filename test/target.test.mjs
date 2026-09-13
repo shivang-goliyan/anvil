@@ -14,9 +14,9 @@ test('custom rename follows the label', () => {
 
 test('custom button and order', () => {
   const c = freshConfig();
-  applyBreak(c, 'custom', null, { button: 'Grab my room', order: 'seats,name,email' });
+  applyBreak(c, 'custom', null, { button: 'Grab my room', order: 'seats,name,email,room,date,time' });
   assert.equal(c.submitLabel, 'Grab my room');
-  assert.deepEqual(c.fields.map((f) => f.key), ['seats', 'name', 'email']);
+  assert.deepEqual(c.fields.map((f) => f.key), ['seats', 'name', 'email', 'room', 'date', 'time']);
 });
 
 test('custom names never collide', () => {

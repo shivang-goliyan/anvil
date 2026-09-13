@@ -43,7 +43,8 @@ export function formMarkup(html, limit = 6000) {
   return chunk.replace(/\s{2,}/g, ' ').slice(0, limit);
 }
 
-const KEEP_ATTRS = new Set(['id', 'class', 'href', 'title', 'alt', 'itemprop', 'role', 'aria-label', 'datetime', 'name', 'data-testid']);
+const KEEP_ATTRS = new Set(['id', 'class', 'href', 'title', 'alt', 'itemprop', 'role', 'aria-label', 'datetime', 'name', 'type', 'placeholder', 'for', 'action']);
+const LIST_AT = 8;
 const DROP_TAGS = 'script, style, noscript, svg, iframe, link, meta, template, head';
 
 // The body with scripts, styles and most attributes gone, long text clipped, and long runs of
@@ -56,21 +57,29 @@ export function compactHtml(html, limit = 24000) {
   const walk = (el) => {
     if (el.attributes) {
       for (const name of Object.keys(el.attributes)) {
-        if (!KEEP_ATTRS.has(name.toLowerCase())) el.removeAttribute(name);
+        // data-* hooks are often the most stable selector on a page, when they are short labels and not blobs
+        const hook = /^data-[\w-]+$/i.test(name) && String(el.getAttribute(name)).length <= 40;
+        if (!KEEP_ATTRS.has(name.toLowerCase()) && !hook) el.removeAttribute(name);
         else if (name === 'href' && el.getAttribute('href').length > 80) el.setAttribute('href', `${el.getAttribute('href').slice(0, 80)}…`);
       }
     }
     const kids = (el.childNodes ?? []).filter((n) => n.nodeType === 1);
+    const sigOf = (kid) => {
+      const cls = (kid.getAttribute('class') ?? '').trim().split(/\s+/).filter(Boolean).join('.');
+      return `${kid.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
+    };
+    const counts = new Map();
+    for (const kid of kids) counts.set(sigOf(kid), (counts.get(sigOf(kid)) ?? 0) + 1);
+    // a real list is cut to three; a handful of look-alike rows (the details on a confirmation page) all stay
     const seen = new Map();
     for (const kid of kids) {
-      const cls = (kid.getAttribute('class') ?? '').trim().split(/\s+/).filter(Boolean).join('.');
-      const sig = `${kid.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
+      const sig = sigOf(kid);
       const n = (seen.get(sig) ?? 0) + 1;
       seen.set(sig, n);
-      if (n > 3) kid.remove();
+      if (counts.get(sig) > LIST_AT && n > 3) kid.remove();
       else walk(kid);
     }
-    for (const [sig, n] of seen) if (n > 3) el.appendChild(new TextNode(` [${n - 3} more ${sig} like the ones above] `, el));
+    for (const [sig, n] of seen) if (n > LIST_AT) el.appendChild(new TextNode(` [${n - 3} more ${sig} like the ones above] `, el));
   };
   walk(body);
 

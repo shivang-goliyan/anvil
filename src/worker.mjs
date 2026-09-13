@@ -75,7 +75,7 @@ async function work(job) {
   console.log(`picked up ${job.kind} ${job.refId}`);
   const beat = setInterval(() => db.job.updateMany({ where: { id: job.id, status: 'running' }, data: { lockedAt: new Date() } }).catch(() => {}), BEAT_MS);
   try {
-    if (job.kind === 'run') await executeRun(job.refId, log);
+    if (job.kind === 'run') await executeRun(job.refId, log, job.payload ?? {});
     else if (job.kind === 'repair') await executeRepair(job.refId, job.payload ?? {}, log);
     else if (job.kind === 'derive') await executeDerive(job.refId, log);
     else throw new Error(`no idea how to do a "${job.kind}" job`);

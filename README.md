@@ -4,9 +4,9 @@ An agent that operates websites, and when a site changes under it, throws its pl
 
 **Try it: https://anvil.kgbnetwork.com** — no key, no sign-up, no install. (The same app also answers at https://attirebytatsavi.com, where the Website Monitoring demo below was set up.)
 
-1. Press **Send Anvil to book it**. Anvil books a real room on the demo site through a remote browser and reads back the confirmation. The page shows each step in plain words, with screenshots of what the remote browser actually saw.
-2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick one of four specific breaks: rename a field, add a review step, move seats onto their own page, or rebuild the confirmation page. Or **change it your way**: type a new label for any box (its name follows the label), new button text, or a new order, so the change is one nobody could have prepared for.
-3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, checks it against the contract, promotes it, and the same booking goes through. The repair opens with two screenshots side by side: what the last good booking saw at the step that broke, and what the broken one saw there instead.
+1. Press **Send Anvil to book it**. Anvil picks the room, date and time, books it on the demo site through a remote browser, reads the confirmation, then looks the booking up on the site's own "Find my booking" page to check what was really stored. The page shows each step in plain words, with screenshots of what the remote browser actually saw.
+2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick a specific break: rename a field, add a review step, move seats onto their own page, rebuild the confirmation page, switch booking references to a new format, or make the site quietly book a different room than the one asked for. Or **change it your way**: type a new label for any box (its name follows the label), new button text, or a new order, so the change is one nobody could have prepared for.
+3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, rehearses it up to the booking button without pressing it, tests the steps after booking on a booking that already exists, promotes it, and then makes the one real booking. The repair opens with two screenshots side by side: what the last good booking saw at the step that broke, and what the broken one saw there instead.
 
 The demo is shared, so everyone with the page open sees every booking, change and repair as it happens, marked when it is someone else's. Below the demo, the same page reads real websites (Hacker News through a Wire action, quotes.toscrape.com through a derived plan) with one click, and can be taught a new one.
 
@@ -18,7 +18,9 @@ A **capability** is a goal plus a cached **plan**: ordered steps (`navigate`, `f
 
 When a run fails, Anvil does not patch the selector that failed. It re-derives the whole plan from the goal, the live page, what changed since the plan was made, and the page the old plan got stuck on. A renamed field, a new review page, a reordered flow and a rebuilt confirmation page all go through the same loop.
 
-The first good run leaves behind a **contract**: required fields, their types, a minimum record count, numeric bounds, and which fields must echo the inputs (the booking name must be the name that was typed in). A repaired plan is promoted only if its result passes that contract. Non-empty is not correct — a plan can happily extract a navigation menu.
+The first good run leaves behind a **contract** in two tiers. **Invariants** are never relaxed: required fields, their types, a minimum record count, fields that must echo the inputs (the booking name must be the name that was typed in), and fields that must agree with each other (the room on the confirmation page must be the room the site's own records hold, read back separately). **Learned details** may legitimately change: numeric ranges and the shape of codes such as booking references. When only a detail moves and every invariant holds, the contract is amended ("check updated") instead of the capability being called broken. A repaired plan is promoted only if its result passes. Non-empty is not correct — a plan can happily extract a navigation menu, and a site can confirm the room you asked for while storing another one.
+
+**Doing things safely.** A plan that books marks exactly one step as the commit (the button that makes the booking). A normal run reads the form back right before pressing it. A repair never presses it: it rehearses the candidate up to that step and checks every input is on the page, then runs only the steps after it on a booking that already exists (the one the failed run made, or the last good one). If the failed run had already booked, that booking is read back instead of made again; if it had not, the repair queues exactly one real booking with the new plan, and if that one fails the capability is marked as needing a person instead of repairing again. A run that fails after the commit is never retried. On the demo site, bookings are counted on the site's side before and after each repair.
 
 ## How it works
 
@@ -48,6 +50,7 @@ Every failed run is classified before anything is repaired. Repairing on every f
 | 403, a captcha or "access denied" page, robots.txt says no | blocked | Capability marked `degraded`. Never repaired: a new plan cannot fix a block. |
 | The page rendered (its canary element is there) but a step failed or the contract failed | structural | A repair is queued. |
 | The page rendered, the only problem is zero records | empty | The run succeeds with an empty result. |
+| The form held every input when the booking was made, and only the site's own stored record disagrees | mismatch | Reported. Not repaired: a new plan cannot fix a site that books the wrong thing. |
 
 ### The repair loop
 
@@ -56,7 +59,7 @@ Every failed run is classified before anything is repaired. Repairing on every f
 1. Mark the capability `repairing`.
 2. Re-read the live entry page and diff its structure against the snapshot the old plan was derived from ("field `email` is gone; an email field `contact_email` sits in the same position, likely a rename").
 3. Ask the model for a new plan from the goal, the old plan, how it failed, the diff, the live page and every page an earlier attempt got stuck on.
-4. Reject plans that are not runnable, run the candidate for real, and check the result against the contract.
+4. Reject plans that are not runnable (including a plan that marks a button as the booking step but still presses something before reading the confirmation). For a read, run the candidate and check it against the contract. For a booking, rehearse it up to the commit step, then run the steps after it on an existing booking and check that against the contract.
 5. Pass: promote it as the next version, mark `healthy`. Fail: add what went wrong to the list of attempts the model is told not to repeat, remember the page it got stuck on, and try again with backoff. If the remote browser drops mid-attempt, the same plan runs again in a new session instead of counting as a failed plan.
 6. After three failed attempts, keep the old plan, mark `degraded`, and say so. A degraded capability will not repair itself again until someone asks.
 
@@ -112,7 +115,8 @@ Self-healing web automation is not a new idea, and Anvil does not claim it is.
 What Anvil adds, concretely:
 
 - **The unit of repair is the whole plan, across pages,** re-derived from the goal. A new review page or a reordered flow is not a broken selector; it needs steps that did not exist before.
-- **A repair is only kept if it passes a contract learned from the first good run** — types, bounds, record counts, and fields that must echo the inputs. Failed repairs roll back and the capability says it is degraded.
+- **A repair is only kept if it passes a contract learned from the first good run** — types, record counts, fields that must echo the inputs, and a second channel (the site's own records) that must agree with the confirmation. Details that may change are learned rather than failed. Failed repairs roll back and the capability says it is degraded.
+- **Repairs do not make bookings.** They rehearse up to the booking button and test reading steps on a booking that already exists; the one real booking happens after promotion.
 - **Triage before repair.** A network blip, a bot block and an empty result are not repaired; only structural failures are, and a degraded capability stops trying.
 - **Repair can start before anything fails,** from a Website Monitoring webhook.
 - **Anyone can watch it happen on the deployed site,** break it themselves, and read every decision in the trace.
@@ -133,6 +137,12 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **The page, end to end** in a headless browser: book, rename the email field, book (fails, structural), repair promoted, book again, with screenshots from the remote browser at each press and at the failure, and no console errors.
 - **Two visitors on the deployed site at once**: one booked, typed their own change (email box renamed to "Where should we write?", button to "Grab my room"), booked (failed), watched the repair promote v2 in 52 seconds on a free model with the before/after pictures, and booked again; the other visitor pressed nothing and saw all four cards live, marked as another visitor's, plus the note that the site had been changed.
 
+On 2026-09-14:
+
+- **Repair bench** (`npm run bench`, the real API, worker and repair loop against a local copy of the demo site in a local Chrome): 10 of 10 cases passed — rename a field, add a review page, split the form over two pages, rebuild the confirmation page, a typed change, three surprises, the wrong-room trap and the new reference format. Every repair was promoted (seven on the first attempt, one on the second), the median repair took 12s, and the site-side booking count went up by 0 during every repair. The wrong-room booking was caught as a mismatch and not repaired; the new reference format passed with the check updated.
+- **The bench found three real bugs before this was deployed:** a model marked the button in front of a new review page as the booking step (a plan like that is now rejected), a value typed on the first page of a split form was invisible to the read-back, and page trimming cut the detail rows of a rebuilt confirmation page down to three, which made that repair fail one run in three (now four of four on the first attempt).
+- **Deployed arc on Anakin's browser:** first booking and a check learned with the site's own records; review page added; booking failed as structural; the repair rehearsed without booking, worked out that the failed run had booked nothing, checked the new reading steps on the last good booking, promoted v2 in 67s (after two models were unavailable), counted 0 bookings during the repair, and made the one real booking, which passed. Then the wrong-room trap: caught as a mismatch, no repair. 5 credits.
+
 ## Limitations
 
 - **Rendering JavaScript costs time.** A rendered read takes around 20 seconds instead of 4.
@@ -142,7 +152,8 @@ All on 2026-09-13, through the HTTP API or the deployed page.
 - **Contracts on changing lists can be too strict.** The Hacker News capability requires a `url` on every story; an "Ask HN" post on the front page would fail it.
 - **A step can time out on a page that did not change.** Seen twice in testing, cause unknown. It is triaged as structural and triggers a repair that was not needed. The page structure at failure is stored to diagnose it.
 - **The credit cap is an estimate** from published prices, and a browser session that runs past two minutes can overshoot it by a credit. Screenshots from the scraper are sometimes missing.
-- **Booking steps are not undone.** A repair attempt runs its candidate plan for real, so an attempt that books a room and then fails the contract (for example, it could not read the new confirmation page) still leaves that booking on the demo site. A real site would need a cancel step or a sandbox account for repair attempts.
+- **Rehearsal trusts the commit mark.** A repair never presses the step marked commit, and plans that press anything between that step and reading the confirmation are rejected. A site where the booking happens on a step that looks like navigation (a "Continue" that silently books) could still be booked during a repair; on the demo site the site-side booking count is logged for every repair to catch exactly that.
+- **"Did the failed run book?" is inferred** from whether the page it stopped on still shows the form the new plan books from. A site whose confirmation page carries an identical form would be misread.
 - **One shared demo.** One worker does one job at a time, everyone sees the same demo site (and each other's bookings and repairs), and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
 - **Doing things is only shown on the demo site.** The browser plans work on any site, but the booking's first plan was written by hand and Anvil repairs it from there; it does not yet derive a new write capability from a sentence. Deriving from a sentence is shown for reading, on real sites.
 - **The monitor checks every four hours** to keep credits down. The proactive demo above used an on-demand check.

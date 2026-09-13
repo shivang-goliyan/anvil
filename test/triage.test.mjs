@@ -61,3 +61,10 @@ test('zero records without canary is structural', () => {
 test('passing contract is ok', () => {
   assert.equal(kind({ contractCheck: passed, records: [{ a: 1 }] }), 'ok');
 });
+
+test('stored record disagreeing is mismatch', () => {
+  const contractCheck = { pass: false, problems: ['"stored_room" (Media room) does not agree with "room" (Quiet room)'] };
+  const sent = { found: ['name', 'room'], missing: [] };
+  assert.equal(kind({ contractCheck, records: [{}], sent }), 'mismatch');
+  assert.equal(kind({ contractCheck, records: [{}], sent: { found: [], missing: ['room'] } }), 'structural');
+});

@@ -213,7 +213,7 @@ const routes = [
     /^\/api\/target$/,
     async (req, res) => {
       const c = await targetAdmin('/_admin/config');
-      const site = { org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm };
+      const site = { org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm, wrongRoom: c.wrongRoom, referenceStyle: c.referenceStyle };
       return send(res, 200, { ...c.described, site, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
     },
   ],

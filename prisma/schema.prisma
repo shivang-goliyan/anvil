@@ -61,6 +61,9 @@ model Contract {
   minRecords     Int
   bounds         Json
   echoes         Json
+  // learned details that may change (shapes of codes like references) and fields that must agree
+  formats        Json?
+  agreements     Json?
   createdAt      DateTime @default(now())
 
   capability Capability  @relation("contracts", fields: [capabilityId], references: [id], onDelete: Cascade)

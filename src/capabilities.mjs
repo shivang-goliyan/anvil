@@ -31,6 +31,8 @@ export async function learnContract(cap, { contract, inputs, snapshot }) {
         minRecords: contract.minRecords,
         bounds: contract.bounds,
         echoes: contract.echoes,
+        agreements: contract.agreements ?? {},
+        formats: contract.formats ?? {},
       },
     }),
     snapshotUpsert(cap.targetUrl, snapshot),
@@ -38,6 +40,19 @@ export async function learnContract(cap, { contract, inputs, snapshot }) {
   ]);
   await db.capability.update({ where: { id: cap.id }, data: { contractId: row.id } });
   return row;
+}
+
+export const amendContractRow = (id, { bounds, formats }) => db.contract.update({ where: { id }, data: { bounds, formats } });
+
+// A plan that books something: repairs must rehearse it and never repeat its commit step.
+export const booksSomething = (cap) => cap.engine === 'browser' && (cap.plan?.steps ?? []).some((s) => s.commit);
+
+// Bookings on the project's own demo site, straight from the site, so "none made while repairing" is checked.
+export async function ownedSiteBookings(cap) {
+  if (!sessionOptions(cap).forward) return null;
+  const admin = process.env.TARGET_ADMIN_URL || process.env.TARGET_FORWARD || 'http://localhost:4310';
+  const res = await fetch(new URL('/_admin/stats', admin), { headers: { 'x-admin-token': process.env.TARGET_ADMIN_TOKEN ?? '' }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+  return res?.ok ? (await res.json()).bookings : null;
 }
 
 export async function promotePlan(cap, { steps, origin, snapshot }) {

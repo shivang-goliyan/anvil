@@ -1,5 +1,8 @@
 // The target site renders entirely from this object. Breaks mutate it at runtime and stack.
 
+export const ROOMS = ['Quiet room', 'Group room', 'Media room'];
+export const SLOTS = ['09:00', '11:00', '14:00', '16:00'];
+
 export function freshConfig() {
   return {
     version: 1,
@@ -10,13 +13,19 @@ export function freshConfig() {
       { key: 'name', name: 'full_name', label: 'Full name', type: 'text', required: true },
       { key: 'email', name: 'email', label: 'Email', type: 'email', required: true },
       { key: 'seats', name: 'seats', label: 'Seats', type: 'number', required: true, min: 1, max: 8 },
+      { key: 'room', name: 'room', label: 'Room', type: 'select', required: true, options: ROOMS },
+      { key: 'date', name: 'date', label: 'Date', type: 'date', required: true },
+      { key: 'time', name: 'time', label: 'Time', type: 'select', required: true, options: SLOTS },
     ],
     // off by default, switched on by breaks 2 to 4
     reviewStep: false,
     seatsFirst: false,
     receiptLayout: false,
     formId: 'reserve-form',
-    confirm: { reference: 'reference', name: 'summary-name', email: 'summary-email', seats: 'summary-seats' },
+    confirm: { reference: 'reference', name: 'summary-name', email: 'summary-email', seats: 'summary-seats', room: 'summary-room', date: 'summary-date', time: 'summary-time' },
+    // traps: the site lies on its confirmation page, or changes how references look
+    wrongRoom: false,
+    referenceStyle: 'HL',
     breaks: [],
   };
 }
@@ -27,6 +36,8 @@ export const BREAKS = {
   'reorder-steps': 'Ask for seats first, on a page of their own',
   'restyle-confirmation': 'Rebuild the confirmation page markup',
   surprise: 'A random change nobody scripted',
+  'wrong-room': 'Quietly book a different room than the one asked for, while the confirmation page shows the right one',
+  'new-reference-format': 'Switch booking references to a new format',
   custom: 'A change the visitor typed in',
 };
 
@@ -36,6 +47,9 @@ const SYNONYMS = {
   name: { words: ['name', 'fullname', 'patron', 'guest', 'who'], labels: ['Your name', 'Name on the booking', 'Guest name', 'Who is booking?'] },
   email: { words: ['email', 'mail', 'contact', 'inbox', 'address'], labels: ['Email address', 'Where should we write?', 'Contact email', 'Your e-mail'] },
   seats: { words: ['seats', 'party', 'people', 'headcount', 'size'], labels: ['How many people?', 'Party size', 'Number of seats', 'Group size'] },
+  room: { words: ['room', 'space', 'area', 'kind'], labels: ['Which room?', 'Space', 'Room type', 'Pick a room'] },
+  date: { words: ['date', 'day', 'when', 'visit'], labels: ['Day of your visit', 'When?', 'Booking date', 'Date of visit'] },
+  time: { words: ['time', 'slot', 'start', 'hour'], labels: ['Start time', 'Time slot', 'Arriving at', 'Which slot?'] },
 };
 
 // Surprise: two or three mutations picked and named at random on the spot, so nobody, including
@@ -64,7 +78,7 @@ function surprise(config) {
     },
     confirmation() {
       const t = tag();
-      config.confirm = { reference: `${pick(['code', 'ref', 'booking', 'ticket'])}-${t}`, name: `who-${t}`, email: `mail-${t}`, seats: `count-${t}` };
+      config.confirm = { reference: `${pick(['code', 'ref', 'booking', 'ticket'])}-${t}`, name: `who-${t}`, email: `mail-${t}`, seats: `count-${t}`, room: `space-${t}`, date: `day-${t}`, time: `slot-${t}` };
       done.push(`the confirmation page now shows the reference in #${config.confirm.reference}, with renamed detail classes`);
     },
   };
@@ -148,9 +162,16 @@ function toggle(config, kind, flag, detail) {
 export function applyBreak(config, kind, key, params) {
   if (kind === 'rename-field') return renameField(config, key);
   if (kind === 'add-step') return toggle(config, kind, 'reviewStep', 'bookings now go through a "check your details" page with its own confirm button');
-  if (kind === 'reorder-steps') return toggle(config, kind, 'seatsFirst', 'the form is now two pages, seats first, then name and email');
+  if (kind === 'reorder-steps') return toggle(config, kind, 'seatsFirst', 'the form is now two pages, seats first, then everything else');
   if (kind === 'restyle-confirmation') return toggle(config, kind, 'receiptLayout', 'the confirmation page was rebuilt with different markup');
   if (kind === 'surprise') return surprise(config);
+  if (kind === 'wrong-room') return toggle(config, kind, 'wrongRoom', 'the site now books a different room than the one chosen, and its confirmation page still shows the chosen one');
+  if (kind === 'new-reference-format') {
+    if (config.referenceStyle === 'BK') return { changed: false, detail: 'references already use the new format' };
+    config.referenceStyle = 'BK';
+    mark(config, { kind });
+    return { changed: true, detail: 'booking references now look like BK-2026-4821-07 instead of HL-3B9AC9' };
+  }
   if (kind === 'custom') return custom(config, params);
   throw new Error(`unknown break kind "${kind}"`);
 }

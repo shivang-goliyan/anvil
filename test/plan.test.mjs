@@ -18,3 +18,16 @@ test('frame must be a selector', () => {
   const plan = { steps: [{ kind: 'navigate', url: '/' }, { kind: 'fill', selector: '#a', value: 'x', frame: 3 }, extract] };
   assert.match(checkPlanShape(plan, { outputFields: ['reference'] }).join(), /frame must be a css selector/);
 });
+
+test('commit must reach the confirmation', () => {
+  const steps = (commitAt) => [
+    { kind: 'navigate', url: '/' },
+    { kind: 'submit', selector: '#form button', ...(commitAt === 1 && { commit: true }) },
+    { kind: 'assert', selector: '#confirm-form' },
+    { kind: 'submit', selector: '#confirm-form button', ...(commitAt === 3 && { commit: true }) },
+    { kind: 'assert', selector: '#reference' },
+    { kind: 'extract', fields: { reference: { selector: '#reference', type: 'string' } } },
+  ];
+  assert.match(checkPlanShape({ steps: steps(1) }, { outputFields: ['reference'], write: true }).join(), /still acts on the page/);
+  assert.deepEqual(checkPlanShape({ steps: steps(3) }, { outputFields: ['reference'], write: true }), []);
+});

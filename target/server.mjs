@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { freshConfig, applyBreak, describe, BREAKS } from './config.mjs';
+import { freshConfig, applyBreak, describe, BREAKS, ROOMS } from './config.mjs';
 
 const port = Number(process.env.TARGET_PORT ?? 4310);
 const adminToken = process.env.TARGET_ADMIN_TOKEN ?? '';
@@ -40,7 +40,9 @@ function layout(title, body) {
   .receipt-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px dashed #d8d2c4; }
   .receipt-row:last-child { border-bottom: 0; }
   .receipt-row .k { color: #555; }
-  input { width: 100%; padding: 8px; font: inherit; box-sizing: border-box; }
+  input, select { width: 100%; padding: 8px; font: inherit; box-sizing: border-box; }
+  .site-header nav { float: right; font-size: 14px; }
+  .site-header nav a { font-weight: 500; }
   button { margin-top: 24px; padding: 10px 18px; font: inherit; background: #1f3a2e; color: #fff; border: 0; }
   .error { color: #a3261f; font-size: 14px; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
@@ -48,7 +50,7 @@ function layout(title, body) {
 </style>
 </head>
 <body>
-<header class="site-header"><a href="/">${esc(config.org)}</a></header>
+<header class="site-header"><a href="/">${esc(config.org)}</a><nav><a href="/find">Find my booking</a></nav></header>
 ${body}
 <footer class="site-footer">Demo target for Anvil. This site is owned by the project so it can be broken on purpose.</footer>
 </body>
@@ -64,8 +66,12 @@ function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.
       const extra = [f.required ? 'required' : '', f.min != null ? `min="${f.min}"` : '', f.max != null ? `max="${f.max}"` : '']
         .filter(Boolean)
         .join(' ');
+      const control =
+        f.type === 'select'
+          ? `<select id="${esc(f.name)}" name="${esc(f.name)}" ${extra}><option value="">Choose…</option>${f.options.map((o) => `<option${values[f.name] === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+          : `<input id="${esc(f.name)}" name="${esc(f.name)}" type="${esc(f.type)}" value="${esc(values[f.name])}" ${extra}>`;
       return `  <label for="${esc(f.name)}">${esc(f.label)}</label>
-  <input id="${esc(f.name)}" name="${esc(f.name)}" type="${esc(f.type)}" value="${esc(values[f.name])}" ${extra}>
+  ${control}
   ${errors[f.name] ? `<p class="error" data-error-for="${esc(f.name)}">${esc(errors[f.name])}</p>` : ''}`;
     })
     .join('\n');
@@ -92,9 +98,7 @@ function reviewPage(values, token) {
 <h1>Check your details</h1>
 <p>Nothing is booked until you confirm.</p>
 <dl>
-  <dt>${esc(byKey('name').label)}</dt><dd>${esc(values.name)}</dd>
-  <dt>${esc(byKey('email').label)}</dt><dd>${esc(values.email)}</dd>
-  <dt>${esc(byKey('seats').label)}</dt><dd>${esc(values.seats)}</dd>
+${config.fields.map((f) => `  <dt>${esc(f.label)}</dt><dd>${esc(values[f.key])}</dd>`).join('\n')}
 </dl>
 <form id="confirm-form" method="post" action="/reserve/confirm">
   <input type="hidden" name="t" value="${esc(token)}">
@@ -115,6 +119,9 @@ function confirmationPage(r) {
   <div class="receipt-row"><span class="k">Patron</span><span class="v" data-field="name">${esc(r.name)}</span></div>
   <div class="receipt-row"><span class="k">Contact</span><span class="v" data-field="email">${esc(r.email)}</span></div>
   <div class="receipt-row"><span class="k">Party</span><span class="v" data-field="seats">${esc(r.seats)}</span></div>
+  <div class="receipt-row"><span class="k">Space</span><span class="v" data-field="room">${esc(r.shownRoom)}</span></div>
+  <div class="receipt-row"><span class="k">Day</span><span class="v" data-field="date">${esc(r.date)}</span></div>
+  <div class="receipt-row"><span class="k">Starts</span><span class="v" data-field="time">${esc(r.time)}</span></div>
 </section>
 <p><a href="/">Book another room</a></p>
 </main>`,
@@ -128,8 +135,50 @@ function confirmationPage(r) {
   <dt>Name</dt><dd class="${esc(config.confirm.name)}">${esc(r.name)}</dd>
   <dt>Email</dt><dd class="${esc(config.confirm.email)}">${esc(r.email)}</dd>
   <dt>Seats</dt><dd class="${esc(config.confirm.seats)}">${esc(r.seats)}</dd>
+  <dt>Room</dt><dd class="${esc(config.confirm.room)}">${esc(r.shownRoom)}</dd>
+  <dt>Date</dt><dd class="${esc(config.confirm.date)}">${esc(r.date)}</dd>
+  <dt>Time</dt><dd class="${esc(config.confirm.time)}">${esc(r.time)}</dd>
 </dl>
+<p><a href="/find">Find this booking later</a></p>
 <p><a href="/">Make another reservation</a></p>
+</main>`,
+  );
+}
+
+// The library's own record of a booking, looked up by reference and email. It shows what was stored.
+function findPage(error) {
+  return layout(
+    'Find my booking',
+    `<main>
+<h1>Find my booking</h1>
+<p>Enter the reference from your confirmation and the email you booked with.</p>
+${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
+<form id="find-form" method="post" action="/find">
+  <label for="find-reference">Booking reference</label>
+  <input id="find-reference" name="reference" required>
+  <label for="find-email">Email</label>
+  <input id="find-email" name="email" type="email" required>
+  <button type="submit">Look it up</button>
+</form>
+</main>`,
+  );
+}
+
+function recordPage(r) {
+  const row = (k, label, v) => `  <dt>${label}</dt><dd data-record="${k}">${esc(v)}</dd>`;
+  return layout(
+    'Your booking',
+    `<main>
+<h1>Your booking</h1>
+<dl class="booking-record">
+${row('reference', 'Reference', r.reference)}
+${row('name', 'Name', r.name)}
+${row('email', 'Email', r.email)}
+${row('seats', 'Seats', r.seats)}
+${row('room', 'Room', r.room)}
+${row('date', 'Date', r.date)}
+${row('time', 'Time', r.time)}
+</dl>
 </main>`,
   );
 }
@@ -144,6 +193,8 @@ function validate(body, keys = config.fields.map((f) => f.key)) {
       continue;
     }
     if (f.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) errors[f.name] = 'That email address does not look right.';
+    if (f.type === 'select' && raw && !f.options.includes(raw)) errors[f.name] = `Pick one of the listed options for ${f.label}.`;
+    if (f.type === 'date' && raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) errors[f.name] = `${f.label} should look like 2026-09-20.`;
     if (f.type === 'number') {
       const n = Number(raw);
       if (!Number.isInteger(n) || n < f.min || n > f.max) errors[f.name] = `${f.label} must be a whole number from ${f.min} to ${f.max}.`;
@@ -188,8 +239,13 @@ const server = createServer(async (req, res) => {
     const seatsPage = (values, errors) => formPage(values, errors, { keys: ['seats'], id: 'party-form', action: '/reserve/seats', button: 'Continue', step: 'Step 1 of 2' });
     const detailsPage = (values, errors, token) => formPage(values, errors, { keys: config.fields.map((f) => f.key).filter((k) => k !== 'seats'), token, step: 'Step 2 of 2' });
     const book = (values) => {
-      const reference = `HL-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
-      reservations.set(reference, { reference, ...values });
+      const reference =
+        config.referenceStyle === 'BK'
+          ? `BK-2026-${String(1000 + (randomBytes(2).readUInt16BE() % 9000))}-${String(randomBytes(1)[0] % 100).padStart(2, '0')}`
+          : `HL-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
+      // the wrong-room trap stores another room but keeps showing the one that was asked for
+      const room = config.wrongRoom ? ROOMS.find((r) => r !== values.room) : values.room;
+      reservations.set(reference, { reference, ...values, room, shownRoom: values.room });
       return send(res, 303, '', { location: `/reservations/${reference}` });
     };
 
@@ -213,7 +269,7 @@ const server = createServer(async (req, res) => {
       const token = body.get('t');
       const earlier = config.seatsFirst ? pending.get(token)?.values : {};
       if (!earlier) return send(res, 303, '', { location: '/' });
-      const keys = config.seatsFirst ? ['name', 'email'] : config.fields.map((f) => f.key);
+      const keys = config.fields.map((f) => f.key).filter((k) => !config.seatsFirst || k !== 'seats');
       const { errors, clean } = validate(body, keys);
       if (Object.keys(errors).length) return send(res, 422, config.seatsFirst ? detailsPage(Object.fromEntries(body), errors, token) : formPage(Object.fromEntries(body), errors));
       if (config.seatsFirst) pending.delete(token);
@@ -236,7 +292,15 @@ const server = createServer(async (req, res) => {
       return book(held.values);
     }
 
-    const match = url.pathname.match(/^\/reservations\/(HL-[A-F0-9]{6})$/);
+    if (req.method === 'GET' && url.pathname === '/find') return send(res, 200, findPage());
+    if (req.method === 'POST' && url.pathname === '/find') {
+      const body = new URLSearchParams(await readBody(req));
+      const r = reservations.get((body.get('reference') ?? '').trim());
+      const found = r && r.email.toLowerCase() === (body.get('email') ?? '').trim().toLowerCase() ? r : null;
+      return send(res, found ? 200 : 404, found ? recordPage(found) : findPage('No booking matches that reference and email.'));
+    }
+
+    const match = url.pathname.match(/^\/reservations\/((?:HL|BK)-[A-Z0-9-]{6,12})$/);
     if (req.method === 'GET' && match) {
       const r = reservations.get(match[1]);
       return r ? send(res, 200, confirmationPage(r)) : send(res, 404, layout('Not found', '<main><h1>No such reservation</h1></main>'));
@@ -245,9 +309,11 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/_admin/')) {
       if (!isAdmin(req)) return sendJson(res, 401, { error: 'bad or missing admin token' });
       if (req.method === 'GET' && url.pathname === '/_admin/config') return sendJson(res, 200, { ...config, described: describe(config), kinds: BREAKS });
+      if (req.method === 'GET' && url.pathname === '/_admin/stats') return sendJson(res, 200, { bookings: reservations.size });
       if (req.method === 'POST' && url.pathname === '/_admin/reset') {
         config = freshConfig();
         pending.clear();
+        reservations.clear();
         return sendJson(res, 200, { ok: true, config, described: describe(config) });
       }
       if (req.method === 'POST' && url.pathname === '/_admin/break') {

@@ -1,11 +1,11 @@
 import { openBrowser } from './anakin.mjs';
 import { runPlan } from './plan.mjs';
-import { deriveContract, checkContract } from './contract.mjs';
+import { deriveContract, checkContract, amendContract } from './contract.mjs';
 import { pageShape, compactHtml } from './page-shape.mjs';
 import { triage } from './triage.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
-import { loadCapability, sessionOptions, learnContract, setStatus } from './capabilities.mjs';
+import { loadCapability, sessionOptions, learnContract, setStatus, amendContractRow } from './capabilities.mjs';
 import { queueRepair, Busy } from './jobs.mjs';
 import { runReadPlan, hasSelector } from './read-plan.mjs';
 import { shooter } from './shots.mjs';
@@ -75,8 +75,8 @@ async function attempt(cap, inputs, log) {
     // structure only in the trace; the trimmed markup goes to the repair job, never to the UI
     const failedHtml = error ? await session.within(5000, session.page.content(), 'reading the page').catch(() => '') : '';
     const pageAtFailure = error ? pageShape(failedHtml).shape : null;
-    const stuckOn = error ? { url: session.page.url(), html: compactHtml(failedHtml, 8000) } : null;
-    return { result, error, canaryPresent, pageText, pageAtFailure, stuckOn };
+    const stuckOn = error ? { url: session.page.url(), html: compactHtml(failedHtml, 8000), committed: !!error.committed, afterCommitUrl: error.afterCommitUrl ?? null, ...(error.committed && { shape: pageAtFailure }) } : null;
+    return { result, error, canaryPresent, pageText, pageAtFailure, stuckOn, sent: result?.sent ?? null, committed: result?.committed ?? !!error?.committed, afterCommitUrl: result?.afterCommitUrl ?? error?.afterCommitUrl ?? null };
   } finally {
     const ms = await session.close();
     log('browser', `closed session after ${(ms / 1000).toFixed(1)}s`, { ms });
@@ -87,7 +87,8 @@ async function attempt(cap, inputs, log) {
 async function runCapability(cap, inputs, log) {
   for (let tryNo = 1; tryNo <= 3; tryNo++) {
     log('run', `running plan v${cap.plan.version}${tryNo > 1 ? ` (retry ${tryNo - 1})` : ''}`, { planId: cap.plan.id, version: cap.plan.version, try: tryNo });
-    const { result, error, canaryPresent, pageText, pageAtFailure, stuckOn } = await attempt(cap, inputs, log);
+    const { result, error, canaryPresent, pageText, pageAtFailure, stuckOn, sent, committed, afterCommitUrl } = await attempt(cap, inputs, log);
+    if (sent) log('sent', sent.missing.length ? `before booking, the page did not hold: ${sent.missing.join(', ')}` : `before booking, the page held every detail asked for (${sent.found.join(', ')})`, sent);
 
     if (error instanceof OverBudget) {
       log('budget', `${error.message}. Not calling Anakin.`, { used: error.used, cap: error.cap });
@@ -105,18 +106,25 @@ async function runCapability(cap, inputs, log) {
       }
       const contract = deriveContract(records, inputs);
       await learnContract(cap, { contract, inputs, snapshot: pageShape(result.entryHtml) });
+      if (afterCommitUrl) result.afterCommitUrl = afterCommitUrl;
       log('contract', `golden sample captured. required: ${contract.requiredFields.join(', ')}`, {
         requiredFields: contract.requiredFields,
         fieldTypes: contract.fieldTypes,
         bounds: contract.bounds,
         echoes: contract.echoes,
       });
-      return { status: 'succeeded', records };
+      return { status: 'succeeded', records, afterCommitUrl };
     }
 
     const contractCheck = error ? null : checkContract(cap.contract, records, inputs);
     if (contractCheck)
-      log('contract', contractCheck.pass ? 'contract passed' : `contract failed: ${contractCheck.problems.join('; ')}`, { problems: contractCheck.problems });
+      log('contract', contractCheck.pass ? 'contract passed' : `contract failed: ${contractCheck.problems.join('; ')}`, { problems: contractCheck.problems, drift: contractCheck.drift });
+    // every invariant held, only a learned detail moved (a new reference format, a wider range): learn it
+    if (contractCheck?.pass && contractCheck.drift.length) {
+      const next = amendContract(cap.contract, records, contractCheck.drift);
+      await amendContractRow(cap.contract.id, next);
+      log('contract', `check updated: ${next.changes.join('; ')}`, { amended: next.changes, drift: contractCheck.drift });
+    }
     if (error)
       log('error', error.message, {
         reason: error.reason ?? error.code ?? null,
@@ -126,11 +134,20 @@ async function runCapability(cap, inputs, log) {
         pageAtFailure,
       });
 
-    const verdict = triage({ error, contractCheck, records, canaryPresent, pageText });
-    if (verdict.kind === 'ok') return { status: 'succeeded', records };
+    const verdict = triage({ error, contractCheck, records, canaryPresent, pageText, sent });
+    if (verdict.kind === 'ok') return { status: 'succeeded', records, afterCommitUrl };
     log('triage', `${verdict.kind}: ${verdict.why}`, { kind: verdict.kind, canaryPresent });
 
     if (verdict.kind === 'empty') return { status: 'succeeded', records, empty: true };
+    if (verdict.kind === 'mismatch') {
+      log('health', 'the website booked something other than what was asked. A new plan cannot fix that, so no repair: this needs a person at the website', { mismatch: contractCheck.problems });
+      return { status: 'failed', failureKind: 'mismatch', why: verdict.why, records };
+    }
+    // a retry after the booking step already ran would book a second time
+    if (verdict.kind === 'transient' && committed) {
+      log('retry', 'not trying again: the booking step already ran, and a second try could book twice', { committed: true });
+      return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records, stuckOn: stuckOn ?? { url: afterCommitUrl, committed: true, afterCommitUrl } };
+    }
     if (verdict.kind === 'transient' && tryNo < 3) {
       const wait = 1000 * 2 ** tryNo;
       log('retry', `transient, not touching the plan. trying again in ${wait / 1000}s`, { wait });
@@ -141,11 +158,11 @@ async function runCapability(cap, inputs, log) {
       await setStatus(cap.id, 'degraded');
       log('health', 'capability marked degraded. A new plan cannot fix a block, so no repair', { status: 'degraded' });
     }
-    return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records, stuckOn };
+    return { status: 'failed', failureKind: verdict.kind, why: verdict.why, records, stuckOn: stuckOn ?? (committed ? { url: afterCommitUrl, committed: true, afterCommitUrl } : null) };
   }
 }
 
-export async function executeRun(runId, log) {
+export async function executeRun(runId, log, { afterRepair = null } = {}) {
   const run = await db.run.findUnique({ where: { id: runId } });
   if (!run) return log('error', 'this run no longer exists (the capability was probably reset)');
   const cap = await loadCapability(run.capabilityId);
@@ -156,7 +173,8 @@ export async function executeRun(runId, log) {
 
   await db.run.update({ where: { id: runId }, data: { status: 'running', startedAt: new Date(), planId: cap.plan.id } });
   const out = await runCapability(cap, run.inputs, log);
-  const result = { records: out.records ?? [], ...(out.empty && { empty: true }), ...(out.why && { why: out.why }) };
+  // afterCommitUrl: where a booking's confirmation lives, so a later repair can test reading steps on it without booking
+  const result = { records: out.records ?? [], ...(out.empty && { empty: true }), ...(out.why && { why: out.why }), ...(out.afterCommitUrl && { afterCommitUrl: out.afterCommitUrl }) };
 
   if (out.failureKind === 'structural') {
     const fresh = await loadCapability(cap.id);
@@ -164,6 +182,9 @@ export async function executeRun(runId, log) {
       log('repair', 'automatic repair is only wired up for browser capabilities so far, so this read capability stays as it is');
     } else if (!fresh.contract) {
       log('repair', 'no contract yet, so a repaired plan would have nothing to be checked against. Not repairing');
+    } else if (afterRepair) {
+      await setStatus(cap.id, 'degraded');
+      log('repair', 'this was the one real booking after a repair, and it still did not pass. Not repairing again: marked as needing a person', { afterRepair, status: 'degraded' });
     } else if (fresh.status === 'degraded') {
       log('repair', 'capability is degraded, so it will not auto-repair. A manual repair can still be triggered', { circuitBreaker: true });
     } else {

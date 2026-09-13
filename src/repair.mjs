@@ -5,10 +5,15 @@ import { pageShape, formMarkup, diffShapes, compactHtml } from './page-shape.mjs
 import { derivePlan } from './derive.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
-import { loadCapability, sessionOptions, setStatus, promotePlan } from './capabilities.mjs';
+import { loadCapability, sessionOptions, setStatus, promotePlan, booksSomething, ownedSiteBookings } from './capabilities.mjs';
+import { queueRun, Busy } from './jobs.mjs';
 import { shooter } from './shots.mjs';
 
 const MAX_ATTEMPTS = 3;
+
+// two page shapes hold the same form: same id, action and buttons
+const formKey = (f) => JSON.stringify([f.id, f.action, f.buttons.map((b) => b.text)]);
+const sameForm = (a, b) => a.forms?.some((f) => f.buttons.length && b.forms?.some((g) => formKey(f) === formKey(g)));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Anakin's browser can go away under a long attempt; that is infrastructure, not a bad plan
 const SESSION_GONE = /Target page, context or browser has been closed|browser has disconnected|Browser closed|WebSocket is not open|session ended|stopped answering/i;
@@ -55,6 +60,17 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   let changes = [];
   let ending = null;
   const rejections = [];
+  const write = booksSomething(cap);
+  const bookingsBefore = write ? await ownedSiteBookings(cap) : null;
+  // A booking to test reading steps on without making a new one: the one the failed run already made,
+  // or else the last good booking.
+  let lastGood = null;
+  if (write) {
+    const run = await db.run.findFirst({ where: { capabilityId: cap.id, status: 'succeeded' }, orderBy: { createdAt: 'desc' }, select: { inputs: true, result: true } });
+    if (run?.result?.afterCommitUrl) lastGood = { url: run.result.afterCommitUrl, inputs: run.inputs, why: 'the last good booking' };
+  }
+  let readExisting = null;
+  let bookedBefore = false;
   // Every page any attempt has seen, so a later attempt never forgets a page an earlier one found.
   const pages = new Map();
   if (stuckOn?.html) pages.set(stuckOn.url, stuckOn.html);
@@ -96,6 +112,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
           markup: formMarkup(live.html),
           rejections,
           attempt: n,
+          write,
         });
       } finally {
         stopKeepAlive();
@@ -103,7 +120,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
       for (const s of derived.skipped) log('derive', `skipped model ${s}`);
       log('derive', `new plan from ${derived.model} in ${(derived.ms / 1000).toFixed(1)}s`, { model: derived.model, ms: derived.ms, promptChars: derived.promptChars });
 
-      const shapeProblems = checkPlanShape(derived.plan, { outputFields: Object.keys(cap.contract.fieldTypes), inputKeys: Object.keys(cap.inputSchema) });
+      const shapeProblems = checkPlanShape(derived.plan, { outputFields: Object.keys(cap.contract.fieldTypes), inputKeys: Object.keys(cap.inputSchema), write });
       if (shapeProblems.length) {
         rejections.push(`attempt ${n} was not runnable: ${shapeProblems.join('; ')}`);
         log('reject', `The plan was not runnable: ${shapeProblems.join('; ')}`, { problems: shapeProblems, steps: derived.plan.steps ?? null });
@@ -111,11 +128,12 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
       }
       log('plan', `candidate plan has ${derived.plan.steps.length} steps`, { steps: derived.plan.steps });
 
-      const execute = () => {
+      const execute = (opts = { rehearse: write }, withInputs = inputs) => {
         const snap = shooter(session, log);
         return session.within(
           120_000,
-          runPlan(derived.plan, inputs, session, {
+          runPlan(derived.plan, withInputs, session, {
+            ...opts,
             baseUrl: cap.targetUrl,
             onStep: (i, s) => log('step', `${i + 1}. ${s.kind} ${s.selector ?? s.url ?? Object.keys(s.fields ?? {}).join(', ')}`, { index: i, step: s }),
             beforePress: (i, s) => snap(`page before step ${i + 1}`, { index: i, kind: s.kind }),
@@ -145,12 +163,55 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
         continue;
       }
 
-      const check = checkContract(cap.contract, result.records, inputs);
-      log('validate', check.pass ? 'contract passed' : `contract failed: ${check.problems.join('; ')}`, { records: result.records, problems: check.problems });
-      if (!check.pass) {
-        await remember(session);
-        rejections.push(`attempt ${n} ran, but the result broke the contract: ${check.problems.join('; ')}. It read ${JSON.stringify(result.records)}`);
-        continue;
+      if (write) {
+        // 1. everything up to the booking button, and nothing booked
+        const missing = result.sent?.missing ?? Object.keys(inputs);
+        log('rehearse', missing.length ? `rehearsed up to the booking step, but the page did not hold: ${missing.join(', ')}` : `rehearsed up to the booking step without booking: the page held every detail (${result.sent.found.join(', ')})`, { sent: result.sent, commitIndex: result.commitIndex });
+        if (missing.length) {
+          await remember(session);
+          rejections.push(`attempt ${n} filled the form but these inputs were not on the page before booking: ${missing.join(', ')}`);
+          continue;
+        }
+        // Did the failed run really book? Its "booking" press may only have reached a page that still asks to
+        // confirm (a new review step). If the page it stopped on is the page this plan books from, nothing was booked.
+        bookedBefore = !!(stuckOn?.committed && stuckOn.afterCommitUrl);
+        if (bookedBefore && stuckOn.shape) {
+          const here = pageShape(await session.within(5000, session.page.content(), 'reading the page').catch(() => '')).shape;
+          if (sameForm(stuckOn.shape, here)) {
+            bookedBefore = false;
+            log('rehearse', 'the old booking button only led to this page, which still asks to confirm, so the failed run booked nothing', { stoppedOn: stuckOn.url });
+          }
+        }
+        const existing = bookedBefore ? { url: stuckOn.afterCommitUrl, inputs, why: 'the booking the failed run already made' } : lastGood;
+        // 2. the steps after booking, tried on a booking that already exists
+        if (existing) {
+          let after;
+          try {
+            after = await execute({ startAt: result.commitIndex + 1, startUrl: existing.url }, existing.inputs);
+          } catch (err) {
+            if (err instanceof OverBudget) throw err;
+            const html = await remember(session);
+            rejections.push(`attempt ${n}: the steps after booking failed on ${existing.why}: ${err.message}`);
+            log('execute', `the steps after booking failed on ${existing.why}: ${err.message}`, { url: err.url ?? null, pageAtFailure: pageShape(html).shape });
+            continue;
+          }
+          const check = checkContract(cap.contract, after.records, existing.inputs);
+          log('validate', check.pass ? `read ${existing.why} with the new steps, and it passed the check` : `read ${existing.why} with the new steps, but the check failed: ${check.problems.join('; ')}`, { records: after.records, problems: check.problems, drift: check.drift, existing: existing.why });
+          if (!check.pass) {
+            await remember(session);
+            rejections.push(`attempt ${n} read ${existing.why} but broke the contract: ${check.problems.join('; ')}. It read ${JSON.stringify(after.records)}`);
+            continue;
+          }
+          readExisting = after.records;
+        }
+      } else {
+        const check = checkContract(cap.contract, result.records, inputs);
+        log('validate', check.pass ? 'contract passed' : `contract failed: ${check.problems.join('; ')}`, { records: result.records, problems: check.problems });
+        if (!check.pass) {
+          await remember(session);
+          rejections.push(`attempt ${n} ran, but the result broke the contract: ${check.problems.join('; ')}. It read ${JSON.stringify(result.records)}`);
+          continue;
+        }
       }
 
       const plan = await promotePlan(cap, { steps: derived.plan.steps, origin: `repair (${derived.model})`, snapshot: now });
@@ -171,6 +232,23 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
     }
   }
 
+  if (write && bookingsBefore !== null) {
+    const after = await ownedSiteBookings(cap);
+    if (after !== null) log('ledger', `bookings made while repairing: ${after - bookingsBefore}`, { during: after - bookingsBefore });
+  }
+  if (ending?.[0] === 'repaired' && write) {
+    if (bookedBefore && readExisting) {
+      log('reuse', 'the booking was already made before it broke, so it is not booked again: the new steps read it back instead', { records: readExisting });
+    } else if (rec.trigger === 'run-failure') {
+      try {
+        const retry = await queueRun(cap.id, inputs, { afterRepair: repairId });
+        log('retry', 'now making the one real booking, with the new steps', { runId: retry.id });
+      } catch (err) {
+        if (!(err instanceof Busy)) throw err;
+        log('retry', 'someone else is already booking with the new steps, so the failed booking is not retried automatically', { runId: err.existing.runId });
+      }
+    }
+  }
   if (ending) return finish(...ending);
 
   await setStatus(cap.id, 'degraded');

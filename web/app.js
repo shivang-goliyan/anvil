@@ -39,11 +39,15 @@ setInterval(() => {
 }, 500);
 
 const PATRONS = [
-  { name: 'Priya Raman', email: 'priya.raman@example.com', seats: 3 },
-  { name: 'Tomas Ortega', email: 'tomas.ortega@example.com', seats: 5 },
-  { name: 'Amara Okafor', email: 'amara.okafor@example.com', seats: 2 },
-  { name: 'Lena Vogel', email: 'lena.vogel@example.com', seats: 4 },
+  { name: 'Priya Raman', email: 'priya.raman@example.com', seats: 3, room: 'Quiet room', time: '11:00' },
+  { name: 'Tomas Ortega', email: 'tomas.ortega@example.com', seats: 5, room: 'Group room', time: '14:00' },
+  { name: 'Amara Okafor', email: 'amara.okafor@example.com', seats: 2, room: 'Media room', time: '09:00' },
+  { name: 'Lena Vogel', email: 'lena.vogel@example.com', seats: 4, room: 'Quiet room', time: '16:00' },
 ];
+const ROOMS = ['Quiet room', 'Group room', 'Media room'];
+const SLOTS = ['09:00', '11:00', '14:00', '16:00'];
+// a few days out, so the date always looks like a real upcoming booking
+const dayAhead = (n) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 let patron = 0;
 let capabilities = [];
 let selected = null;
@@ -64,15 +68,17 @@ function stepText(s) {
   if (s.kind === 'fill') return `fill ${s.selector}  ←  ${s.value}`;
   if (s.kind === 'select') return `select ${s.selector}  ←  ${s.value}`;
   if (s.kind === 'check') return `check ${s.selector}`;
-  if (s.kind === 'click') return `click ${s.selector}`;
-  if (s.kind === 'submit') return `submit ${s.selector}`;
+  if (s.kind === 'click') return `click ${s.selector}${s.commit ? '  (books)' : ''}`;
+  if (s.kind === 'submit') return `submit ${s.selector}${s.commit ? '  (books)' : ''}`;
   if (s.kind === 'assert') return `expect ${s.selector}`;
   if (s.kind === 'extract') return `read ${s.each ? `each ${s.each}: ` : ''}${Object.entries(s.fields ?? {}).map(([k, f]) => (s.each ? k : `${k} ${f.selector}`)).join(', ')}`;
   if (s.kind === 'wire') return `Wire action ${s.actionId}`;
   return s.kind;
 }
 
-const FIELD_WORDS = { reference: 'the booking reference', name: 'the name', email: 'the email', seats: 'the number of seats' };
+const FIELD_WORDS = { reference: 'the booking reference', name: 'the name', email: 'the email', seats: 'the number of seats', room: 'the room', date: 'the date', time: 'the time' };
+const stored = (k) => /^stored_/.test(k);
+const fieldWords = (k) => FIELD_WORDS[k] ?? k;
 
 function boxLabel(selector) {
   // a recording ran against the site as it was then, so the labels on the site now could be wrong
@@ -87,6 +93,7 @@ function plainStep(s, inputs) {
   if (!s) return '';
   if (s.kind === 'navigate') {
     if (!s.url || s.url === '/') return 'Opened the booking page';
+    if (/\/find\b/.test(s.url)) return 'Opened the library\'s “Find my booking” page, to check what it actually stored';
     try {
       const u = new URL(s.url);
       return `Opened ${u.hostname}${u.pathname === '/' ? '' : u.pathname}`;
@@ -95,6 +102,8 @@ function plainStep(s, inputs) {
     }
   }
   if (s.kind === 'fill') {
+    const got = String(s.value ?? '').match(/\{\{\s*out\.(\w+)\s*\}\}/)?.[1];
+    if (got) return `Typed ${fieldWords(got)} it had just read`;
     const key = String(s.value ?? '').match(/\{\{\s*(\w+)\s*\}\}/)?.[1];
     const what = key ? (inputs?.[key] !== undefined ? quoted(inputs[key]) : (FIELD_WORDS[key] ?? key)) : quoted(s.value);
     const label = boxLabel(s.selector);
@@ -109,11 +118,14 @@ function plainStep(s, inputs) {
   if (s.kind === 'click' || s.kind === 'submit') {
     const m = String(s.selector ?? '').match(/has-text\(\s*["'](.+?)["']\s*\)|text\s*=\s*["']?([^"'\]]+)/);
     const text = m?.[1] ?? m?.[2];
+    if (s.commit) return text ? `Pressed ${quoted(text.trim())}, the button that makes the booking` : 'Pressed the button that makes the booking';
     return text ? `Pressed ${quoted(text.trim())}` : s.kind === 'submit' ? 'Pressed the button to send the page' : 'Clicked a button on the page';
   }
   if (s.kind === 'assert') return 'Checked the next page had loaded';
   if (s.kind === 'extract') {
-    const words = Object.keys(s.fields ?? {}).map((k) => FIELD_WORDS[k] ?? k);
+    const keys = Object.keys(s.fields ?? {});
+    if (keys.length && keys.every(stored)) return 'Read what the library has on record for this booking';
+    const words = keys.map(fieldWords);
     return s.each ? `Read ${listWords(words)} for every item on the page` : `Read ${listWords(words)} off the page`;
   }
   if (s.kind === 'wire') return "Asked Anakin's Wire for the data";
@@ -374,6 +386,8 @@ function verdictBox(kind, { why, at, reason }) {
     const where = at ? `It got stuck on this step: ${low1(at)}. ${reason === 'selector-missing' ? 'What that step was looking for is not on the page any more.' : `${cap1(why)}.`}` : `The booking it came back with did not look right: ${why}.`;
     return box('', 'The website changed, so the saved steps stopped fitting', `${where} The page itself loaded fine, so this is not a network glitch. This is the kind of failure Anvil repairs by itself.`);
   }
+  if (kind === 'mismatch')
+    return box('blocked', 'The library booked something other than what was asked', `Anvil's steps all worked, and the form held every detail when it pressed book. ${why}. New steps cannot fix a website that books the wrong thing, so Anvil does not try to repair itself. It flags this for a person instead.`);
   if (kind === 'blocked') return box('blocked', 'The website refused Anvil', `${cap1(why)}. New steps cannot get past a block, so Anvil does not try. It marks itself as needing a person instead.`);
   if (kind === 'empty') return box('transient', 'Nothing to return', 'The page loaded and there was simply nothing there. That counts as a success.');
   return box('transient', 'A hiccup, not a website change', `${cap1(why)}. A hiccup is no reason to change the steps, so Anvil leaves them alone.`);
@@ -393,13 +407,18 @@ function runView(card, capability) {
   let presses = 0;
   let failure = null;
   let checked = false;
+  let sent = null;
+  let amended = null;
+  let records = [];
   return {
     context(json) {
       inputs ??= json.run?.inputs ?? null;
     },
     event(e) {
       const d = e.detail ?? {};
-      if (e.kind === 'run') {
+      if (e.kind === 'queued' && d.afterRepair) {
+        card.heading.textContent = 'Anvil makes the real booking, with the new steps';
+      } else if (e.kind === 'run') {
         card.sub.textContent = `${booking ? 'on Harbor Lane Library · ' : ''}saved steps v${d.version}${d.try > 1 ? ` · try ${d.try}` : ''}`;
         setChip(card, 'working', 'run', true);
         waiting.remove();
@@ -412,6 +431,9 @@ function runView(card, capability) {
       } else if (e.kind === 'step') {
         steps[d.index] = d.step;
         list.step(plainStep(d.step, inputs), stepText(d.step));
+      } else if (e.kind === 'sent') {
+        sent = d;
+        if (d.missing?.length) list.note(`Before booking, the page did not hold ${listWords(d.missing.map(fieldWords))}`);
       } else if (e.kind === 'shot') {
         const [text, tone] = shotCaption(d, presses, plainStep(steps[d.index], inputs));
         if (!d.stuck && !d.after && d.kind !== 'extract') presses++;
@@ -419,17 +441,51 @@ function runView(card, capability) {
       } else if (e.kind === 'error') {
         failure = d;
         list.fail();
+      } else if (e.kind === 'result') {
+        records = d.records ?? [];
       } else if (e.kind === 'triage') {
         list.fail();
         const at = failure?.step !== null && failure?.step !== undefined && steps[failure.step] ? plainStep(steps[failure.step], inputs) : null;
-        card.body.append(verdictBox(d.kind, { why: humanize(e.label.replace(/^\w+: /, '')).replace(/\.$/, ''), at, reason: failure?.reason }));
+        let why = humanize(e.label.replace(/^\w+: /, '')).replace(/\.$/, '');
+        if (d.kind === 'mismatch' && records[0]) {
+          const rec = records[0];
+          const off = Object.keys(rec).filter((k) => stored(k) && String(rec[k]) !== String(rec[k.replace(/^stored_/, '')]));
+          if (off.length)
+            why = off
+              .map((k) => {
+                const plain = k.replace(/^stored_/, '');
+                return `It asked for ${inputs?.[plain] !== undefined ? quoted(inputs[plain]) : fieldWords(plain)}, and the confirmation page said ${quoted(rec[plain])}, but the library's own records say ${quoted(rec[k])}`;
+              })
+              .join('. ');
+        }
+        card.body.append(verdictBox(d.kind, { why, at, reason: failure?.reason }));
       } else if (e.kind === 'contract' && d.requiredFields) {
-        const echoes = Object.keys(d.echoes ?? {}).map((k) => FIELD_WORDS[k] ?? k);
+        const shown = d.requiredFields.filter((k) => !stored(k));
+        const echoKeys = Object.keys(d.echoes ?? {}).filter((k) => !stored(k));
+        const everyDetail = echoKeys.length > 2 && shown.filter((k) => !echoKeys.includes(k)).length <= 1;
+        const echoes = everyDetail ? ['every detail'] : echoKeys.map(fieldWords);
+        const onRecord = d.requiredFields.some(stored);
         card.body.append(
-          h('div', { class: 'verdict transient' }, h('h4', { text: 'Anvil learned what a correct result looks like' }), h('p', { text: `This was the first good ${booking ? 'booking' : 'run'}, so Anvil remembers it: ${listWords(d.requiredFields.map((k) => FIELD_WORDS[k] ?? k))} must come back filled in${echoes.length ? `, and ${listWords(echoes)} must match what was typed in` : ''}. Any new steps it writes later only count if they pass the same check.` })),
+          h(
+            'div',
+            { class: 'verdict transient' },
+            h('h4', { text: 'Anvil learned what a correct result looks like' }),
+            h('p', {
+              text: `This was the first good ${booking ? 'booking' : 'run'}, so Anvil remembers it: ${everyDetail ? `${listWords(shown.filter((k) => !echoKeys.includes(k)).map(fieldWords)) || 'the result'} must come back` : `${listWords(shown.map(fieldWords))} must come back filled in`}${echoes.length ? `, ${listWords(echoes)} must match what was typed in` : ''}${onRecord ? ", and the library's own records, looked up separately, must say the same as its confirmation page" : ''}. Any new steps it writes later only count if they pass the same check.`,
+            }),
+          ),
+        );
+      } else if (e.kind === 'contract' && d.amended) {
+        amended = d.amended;
+        card.body.append(
+          h('div', { class: 'verdict transient' }, h('h4', { text: 'Anvil updated its check' }), h('p', { text: `${cap1(listWords(d.amended))}. That is a detail a website may change on purpose, and everything that matters still matched, so Anvil learns the new look instead of calling the booking broken.` })),
         );
       } else if (e.kind === 'contract') {
         checked = !d.problems?.length;
+      } else if (e.kind === 'retry' && d.committed) {
+        list.note('Not trying again: the booking button was already pressed, and a second try could book twice');
+      } else if (e.kind === 'health' && d.mismatch) {
+        list.fail();
       } else if (e.kind === 'budget') {
         card.body.append(h('div', { class: 'verdict capped' }, h('h4', { text: 'The hourly credit budget is used up' }), h('p', { text: e.label })));
       } else if (e.kind === 'repair' && d.circuitBreaker) {
@@ -447,12 +503,16 @@ function runView(card, capability) {
         setChip(card, rec?.reference ? 'booked' : r.result?.empty ? 'nothing to return' : 'done', 'good');
         if (rec?.reference) {
           const seats = rec.seats !== undefined ? `${rec.seats} seat${rec.seats === 1 ? '' : 's'}` : null;
+          const when = [rec.date && new Date(`${rec.date}T12:00`).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }), rec.time].filter(Boolean).join(' at ');
+          const onRecord = Object.keys(rec).some(stored);
           card.body.prepend(
             h(
               'div',
               { class: 'booked' },
               h('div', { class: 'ref' }, h('small', { text: 'Booked · reference' }), rec.reference),
-              h('p', { text: `A study room for ${[rec.name, seats].filter(Boolean).join(', ')}${rec.email ? `, confirmation to ${rec.email}` : ''}. Anvil read this off the library's confirmation page${checked ? ', and it passed the same check as the first good booking' : ''}.` }),
+              h('p', {
+                text: `${rec.room ?? 'A study room'}${when ? `, ${when}` : ''}, for ${[rec.name, seats].filter(Boolean).join(', ')}${rec.email ? `, confirmation to ${rec.email}` : ''}. Anvil read this off the confirmation page${onRecord ? ", then looked the booking up on the library's own “Find my booking” page, and both say the same" : ''}${checked ? `. It passed the same check as the first good booking${amended ? ', with the check updated as described' : ''}` : ''}.`,
+              }),
             ),
           );
         } else {
@@ -487,12 +547,17 @@ function runView(card, capability) {
         if (mine) playRecording('This run hit the hourly Anakin budget.');
       } else {
         list.fail();
-        const words = { structural: 'website changed', transient: 'hiccup', blocked: 'blocked' };
+        const words = { structural: 'website changed', transient: 'hiccup', blocked: 'blocked', mismatch: 'booked the wrong thing' };
         setChip(card, `did not work · ${words[r.failureKind] ?? r.failureKind ?? 'failed'}`, 'bad');
         if (!card.body.querySelector('.verdict')) card.body.append(h('div', { class: 'verdict' }, h('h4', { text: 'It did not work' }), h('p', { text: humanize(r.result?.why) })));
         if (mine && booking) {
           afterRun(false, r.failureKind === 'structural');
-          toast(r.failureKind === 'structural' ? 'The website changed, so the booking did not go through' : 'That booking did not go through', 'bad', card.node, r.result?.repairId ? 'Anvil is fixing itself now. Watch below.' : humanize(r.result?.why));
+          toast(
+            r.failureKind === 'structural' ? 'The website changed, so the booking did not go through' : r.failureKind === 'mismatch' ? 'Caught: the library booked the wrong thing' : 'That booking did not go through',
+            'bad',
+            card.node,
+            r.result?.repairId ? 'Anvil is fixing itself now. Watch below.' : r.failureKind === 'mismatch' ? "Its records disagree with what Anvil asked for. Not something new steps can fix." : humanize(r.result?.why),
+          );
         }
         if (r.result?.repairId) {
           card.next.append(h('p', { class: 'handoff', text: 'Anvil is fixing itself, below ↓' }));
@@ -517,6 +582,7 @@ function repairView(card) {
   let candidate = [];
   let presses = 0;
   let skipped = 0;
+  let retryRun = null;
   const add = (opts) => {
     endLive(view);
     return stepItem(view.stepper, opts);
@@ -579,7 +645,8 @@ function repairView(card) {
         const v = viewer();
         shots = v;
         presses = 0;
-        running = add({ icon: '▶', title: 'Tried them on the real website', text: 'in the same cloud browser', extra: v.node });
+        const books = candidate.some((s) => s.commit);
+        running = add({ icon: '▶', title: books ? 'Rehearsed them on the real website' : 'Tried them on the real website', text: books ? 'filling everything in, and stopping before the button that books' : 'in the same cloud browser', extra: v.node });
         liveRow(view, 'Running the new steps', 'Anakin Browser API');
       } else if (e.kind === 'step' && running) {
         running.querySelector('p').textContent = short(plainStep(d.step), 110);
@@ -596,6 +663,36 @@ function repairView(card) {
         const doing = { navigate: 'opening the page', fill: 'typing into a box', click: 'pressing a button', submit: 'pressing a button', assert: 'checking the next page had loaded', extract: 'reading the result' };
         const text = m ? `It got stuck at step ${m[1]}, ${doing[m[2]] ?? m[2]}: what it was looking for was not there.` : `${cap1(humanize(e.label.replace(/^candidate plan failed: /, '')).replace(/\.$/, ''))}.`;
         add({ icon: '✕', tone: 'bad', title: 'That did not work', text: `${text} The next try also gets to see the page it got stuck on.` });
+      } else if (e.kind === 'rehearse' && d.stoppedOn) {
+        add({ icon: '◌', title: 'The old steps never booked anything', text: 'The button they pressed now only leads to a page that still asks to confirm. So there is no booking to reuse: once fixed, Anvil makes one.' });
+      } else if (e.kind === 'rehearse') {
+        if (running) running.querySelector('p').textContent = 'filled everything in, then stopped before the button that books';
+        const miss = d.sent?.missing ?? [];
+        add({
+          icon: miss.length ? '✕' : '◌',
+          tone: miss.length ? 'bad' : 'good',
+          title: miss.length ? 'The rehearsal came up short' : 'Rehearsed the booking without booking',
+          text: miss.length ? `Right before the booking button, the page did not hold ${listWords(miss.map(fieldWords))}.` : 'Right before the button that books, it read the page back: every detail was there. Nothing was sent.',
+          extra: h('ul', { class: 'checks' }, [...(d.sent?.found ?? []).map((k) => h('li', {}, h('b', { text: k }), 'on the page ✓')), ...miss.map((k) => h('li', { class: 'miss', text: `${k} not on the page` }))]),
+        });
+      } else if (e.kind === 'validate' && d.existing) {
+        if (running) running.querySelector('p').textContent = 'filled everything in without booking, then ran the steps after booking on a booking that already exists';
+        const bad = d.problems?.length;
+        const rec = d.records?.[0] ?? {};
+        add({
+          icon: bad ? '✕' : '✓',
+          tone: bad ? 'bad' : 'good',
+          title: bad ? 'The new reading steps did not pass the check' : 'Checked the steps after booking, on a booking that already exists',
+          text: bad ? null : `Instead of booking again, it opened ${d.existing} and ran the new steps from there: the confirmation page and the library's own records say the same thing.`,
+          extra: bad ? h('ul', { class: 'checks' }, d.problems.map((p) => h('li', { class: 'miss', text: p }))) : h('ul', { class: 'checks' }, Object.entries(rec).filter(([k]) => !stored(k)).map(([k, v]) => h('li', {}, h('b', { text: k }), `${v}${rec[`stored_${k}`] !== undefined ? ' · on record ✓' : ' ✓'}`))),
+        });
+      } else if (e.kind === 'ledger') {
+        add({ icon: '#', tone: d.during ? 'bad' : 'good', title: d.during ? `${d.during} booking${d.during === 1 ? ' was' : 's were'} made while fixing` : 'No bookings made while fixing', text: "Counted on the library's side, not taken on trust." });
+      } else if (e.kind === 'reuse') {
+        add({ icon: '✓', tone: 'good', title: 'Not booking twice', text: 'The old steps had already made the booking before they got stuck, so the new steps read that booking back instead of making another.' });
+      } else if (e.kind === 'retry' && d.runId) {
+        if (/^now making/.test(e.label)) retryRun = d.runId;
+        add({ icon: '→', title: retryRun ? 'Now the one real booking, with the new steps' : 'Not retrying the booking', text: retryRun ? 'The booking that failed is made again, once, using the saved new steps. It shows up just below.' : cap1(e.label) });
       } else if (e.kind === 'validate') {
         if (running) running.querySelector('p').textContent = 'every step ran, in the same cloud browser';
         const bad = d.problems?.length;
@@ -629,8 +726,9 @@ function repairView(card) {
       if (!replay) {
         // a repair fixes the shared site, so everyone watching may book with it
         if (r.outcome === 'repaired') {
-          card.next.append(h('button', { type: 'button', class: 'btn blue', text: 'Book again with the new steps →', onclick: () => $('run-button').click() }));
-          toast(`Fixed · saved as version ${json.toPlan?.version ?? json.capability?.plan?.version ?? ''}`.trim(), 'good', card.node, 'Anvil wrote new steps and proved them with a real booking. Book again to see them work.');
+          if (retryRun) follow('run', retryRun, { others });
+          else card.next.append(h('button', { type: 'button', class: 'btn blue', text: 'Book again with the new steps →', onclick: () => $('run-button').click() }));
+          toast(`Fixed · saved as version ${json.toPlan?.version ?? json.capability?.plan?.version ?? ''}`.trim(), 'good', card.node, retryRun ? 'Rehearsed and checked without booking. Now it makes the one real booking.' : 'Anvil wrote new steps and checked them. Book again to see them work.');
         }
         if (r.outcome === 'degraded') toast('Not fixed this time', 'bad', card.node, 'Three tries did not pass the check, so Anvil kept its old steps and says so.');
         if (!others) {
@@ -825,6 +923,8 @@ const current = () => capabilities.find((c) => c.id === selected);
 
 const measure = document.createElement('canvas').getContext('2d');
 const sizeInput = (input) => {
+  // a date box draws its own picker, so it keeps the width the stylesheet gives it
+  if (input.type === 'date') return;
   const style = getComputedStyle(input);
   measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
   const w = measure.measureText(input.value || input.placeholder || 'xx').width;
@@ -838,18 +938,34 @@ function renderComposer(cap) {
   box.replaceChildren();
   if (!cap) return;
   const input = (key, type, value) => {
-    const el = h('input', { name: key, type: type === 'number' ? 'number' : key === 'email' ? 'email' : 'text', value: value ?? '', required: true, 'aria-label': key, min: type === 'number' ? 1 : null, max: type === 'number' ? 8 : null, oninput: (e) => sizeInput(e.target) });
+    const el = h('input', { name: key, type: type === 'number' ? 'number' : key === 'email' ? 'email' : key === 'date' ? 'date' : 'text', value: value ?? '', required: true, 'aria-label': key, min: type === 'number' ? 1 : null, max: type === 'number' ? 8 : null, oninput: (e) => sizeInput(e.target) });
     sizeInput(el);
     return el;
   };
+  const choice = (key, options, value) => h('select', { name: key, required: true, 'aria-label': key }, options.map((o) => h('option', { value: o, text: o, selected: o === value })));
   const schema = cap.inputSchema ?? {};
   const sample = PATRONS[patron % PATRONS.length];
-  const booking = cap.engine === 'browser' && schema.name && schema.email && schema.seats;
+  const booking = cap.engine === 'browser' && schema.name && schema.email && schema.seats && schema.room;
   $('run-button').firstChild.textContent = booking ? 'Send Anvil to book it ' : 'Run it ';
   $('composer-hint').hidden = !booking;
   if (booking) {
     $('composer-kicker').textContent = 'Tell Anvil what to book · you can edit the details';
-    box.append('Book a study room for ', input('name', 'string', sample.name), ' at ', input('email', 'string', sample.email), ' for ', input('seats', 'number', sample.seats), ' people.');
+    const options = (key, fallback) => site?.fields?.find((f) => f.key === key)?.options ?? fallback;
+    box.append(
+      'Book the ',
+      choice('room', options('room', ROOMS), sample.room),
+      ' on ',
+      input('date', 'string', dayAhead(2 + (patron % 5))),
+      ' at ',
+      choice('time', options('time', SLOTS), sample.time),
+      ' for ',
+      input('seats', 'number', sample.seats),
+      ' people, in the name of ',
+      input('name', 'string', sample.name),
+      ', confirmation to ',
+      input('email', 'string', sample.email),
+      '.',
+    );
     // measured once they are on the page; a detached input has no font to measure with
     requestAnimationFrame(() => box.querySelectorAll('input').forEach(sizeInput));
   } else if (Object.keys(schema).length) {
@@ -960,14 +1076,16 @@ $('repair-button').addEventListener('click', async () => {
 
 // ------------------------------------------------------------------ the demo site card
 
-const ORIGINAL_NAMES = { name: 'full_name', email: 'email', seats: 'seats' };
-const BREAK_ICONS = { 'rename-field': 'Aa', 'add-step': '+', 'reorder-steps': '⇅', 'restyle-confirmation': '▤', surprise: '✦' };
+const ORIGINAL_NAMES = { name: 'full_name', email: 'email', seats: 'seats', room: 'room', date: 'date', time: 'time' };
+const BREAK_ICONS = { 'rename-field': 'Aa', 'add-step': '+', 'reorder-steps': '⇅', 'restyle-confirmation': '▤', 'wrong-room': '≠', 'new-reference-format': '#', surprise: '✦' };
 const BREAK_SHORT = {
   custom: 'Your own change',
   'rename-field': 'Rename the Email box',
   'add-step': 'Add a “check your details” page',
   'reorder-steps': 'Ask for seats on a page of its own',
   'restyle-confirmation': 'Redesign the confirmation page',
+  'wrong-room': 'Quietly book the wrong room',
+  'new-reference-format': 'Change how booking references look',
   surprise: 'Surprise me: random changes nobody scripted',
 };
 // these can be applied again and again, each time differently
@@ -985,20 +1103,21 @@ function renderBrowser(t) {
   const pages = [];
   if (s.seatsFirst) {
     pages.push(page('Page 1', [miniField(by.seats), h('span', { class: 'go', text: 'Continue' })], { changed: true, flag: 'reordered' }));
-    pages.push(page('Page 2', [miniField(by.name), miniField(by.email), h('span', { class: 'go', text: s.submitLabel })]));
+    pages.push(page('Page 2', [s.fields.filter((f) => f.key !== 'seats').map(miniField), h('span', { class: 'go', text: s.submitLabel })]));
   } else {
     const formChanged = s.formId && s.formId !== 'reserve-form';
-    const shuffled = s.fields.map((f) => f.key).join() !== 'name,email,seats';
+    const shuffled = s.fields.map((f) => f.key).join() !== Object.keys(ORIGINAL_NAMES).join();
     pages.push(page('Form', [formChanged ? h('code', { class: 'ref', text: `#${s.formId}` }) : null, s.fields.map(miniField), h('span', { class: 'go', text: s.submitLabel })], { changed: formChanged || shuffled, flag: formChanged ? 'changed' : shuffled ? 'shuffled' : null }));
   }
   if (s.reviewStep) pages.push(page('Review', [h('div', { class: 'rows' }, h('i'), h('i'), h('i')), h('span', { class: 'go', text: 'Confirm' })], { changed: true, flag: 'new step' }));
   const refId = s.confirm?.reference ?? 'reference';
   pages.push(
-    page('Confirmation', [h('div', { class: 'rows' }, h('i'), h('i'), s.receiptLayout ? h('i') : null), h('code', { class: 'ref', text: s.receiptLayout ? '.booking-code' : `#${refId}` })], {
-      changed: s.receiptLayout || refId !== 'reference',
-      flag: s.receiptLayout ? 'rebuilt' : refId !== 'reference' ? 'renamed' : null,
+    page('Confirmation', [h('div', { class: 'rows' }, h('i'), h('i'), s.receiptLayout ? h('i') : null), h('code', { class: 'ref', text: s.referenceStyle === 'BK' ? 'BK-2026-4821-07' : s.receiptLayout ? '.booking-code' : `#${refId}` })], {
+      changed: s.receiptLayout || refId !== 'reference' || s.referenceStyle === 'BK',
+      flag: s.receiptLayout ? 'rebuilt' : s.referenceStyle === 'BK' ? 'new format' : refId !== 'reference' ? 'renamed' : null,
     }),
   );
+  pages.push(page('Find my booking', [h('div', { class: 'rows' }, h('i'), h('i')), h('code', { class: 'ref', text: s.wrongRoom ? 'stores another room' : 'the stored record' })], { changed: s.wrongRoom, flag: s.wrongRoom ? 'wrong room' : null }));
   const row = pages.flatMap((p, i) => (i ? [h('span', { class: 'arrow', text: '→' }), p] : [p]));
   $('browser').replaceChildren(h('div', { class: 'chrome' }, h('i'), h('i'), h('i'), h('span', { text: `${s.org} · page by page` })), h('div', { class: 'pages' }, row));
 }
@@ -1086,9 +1205,12 @@ function renderYours(s, busy) {
   const keep = { field: field.value, order: order.value };
   field.replaceChildren(...s.fields.map((f) => h('option', { value: f.key, text: f.label })));
   const label = (key) => s.fields.find((f) => f.key === key).label;
-  const perms = (xs) => (xs.length < 2 ? [xs] : xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])));
-  const now = s.fields.map((f) => f.key).join();
-  order.replaceChildren(...perms(s.fields.map((f) => f.key)).map((p) => h('option', { value: p.join(), text: `${p.map(label).join(' → ')}${p.join() === now ? ' (as it is)' : ''}` })));
+  const keys = s.fields.map((f) => f.key);
+  const now = keys.join();
+  // six boxes make 720 orders; offer the readable handful: as it is, reversed, and each box moved to the front
+  const orders = [keys, [...keys].reverse(), ...keys.slice(1).map((k) => [k, ...keys.filter((x) => x !== k)])];
+  const seen = new Set();
+  order.replaceChildren(...orders.filter((p) => !seen.has(p.join()) && seen.add(p.join())).map((p) => h('option', { value: p.join(), text: `${p.map(label).join(' → ')}${p.join() === now ? ' (as it is)' : ''}` })));
   if ([...field.options].some((o) => o.value === keep.field)) field.value = keep.field;
   order.value = [...order.options].some((o) => o.value === keep.order) ? keep.order : now;
   $('yours-form').querySelector('button').disabled = busy;

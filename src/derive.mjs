@@ -26,14 +26,25 @@ Rules:
 - An assert must use a selector that exists only on the page you expect next (an id, a specific attribute or
   text), never a generic one such as "p strong" or "h1" that an error page could also match. The same goes
   for extract selectors: anchor them to the element that holds the value.
-- Fill values must be {{inputKey}} placeholders using the input keys provided, never literal data.
-- The extract step must produce exactly the output fields listed, with the listed types, from the final page.
+- Fill values must be {{inputKey}} placeholders using the input keys provided, never literal data. A value read by an
+  earlier extract step can be typed later as {{out.<outputField>}} (for example a booking reference into a lookup form).
+- Extract steps together must produce exactly the output fields listed, with the listed types. A flow may extract
+  on several pages; each extract reads the page it runs on.
+- Fields named stored_<x> are what the site itself has on record, read back from its own lookup page after the
+  booking; <x> is what the confirmation page showed. Never read stored_<x> from the confirmation page.
 - If a previous plan is given, keep every step that still matches and change only what the site change broke.
 - Respond with the JSON object only.`;
 
-export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, pages = [], changes, shape, markup, rejections = [], attempt = 1 }) {
+const WRITE_RULES = `THIS FLOW MAKES A BOOKING
+Exactly one step, the click or submit that actually makes the booking, must carry "commit": true. When the site
+shows a review or "check your details" page first, the commit is the button on that page, not the one that leads to it. Every step before it
+only fills in and moves through the form; it is tried out first without being pressed, so all inputs must be on the
+page by then. Steps after it read the confirmation and check the booking; they must not book again.`;
+
+export async function derivePlan({ goal, entryUrl, inputKeys, outputFields, previousPlan, failure, pages = [], changes, shape, markup, rejections = [], attempt = 1, write = false }) {
   const prompt = [
     `GOAL\n${goal}`,
+    write && WRITE_RULES,
     `ENTRY URL\n${entryUrl}`,
     `INPUT KEYS\n${inputKeys.join(', ')}`,
     `OUTPUT FIELDS (name: type)\n${Object.entries(outputFields).map(([k, t]) => `${k}: ${t}`).join('\n')}`,
