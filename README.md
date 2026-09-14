@@ -5,10 +5,10 @@ An agent that operates websites, and when a site changes under it, throws its pl
 **Try it: https://anvil.kgbnetwork.com** — no key, no sign-up, no install. (The same app also answers at https://attirebytatsavi.com, where the Website Monitoring demo below was set up.)
 
 1. Press **Send Anvil to book it**. Anvil picks the room, date and time, books it on the demo site through a remote browser, reads the confirmation, then looks the booking up on the site's own "Find my booking" page to check what was really stored. The page shows each step in plain words, with screenshots of what the remote browser actually saw.
-2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick a specific break: rename a field, add a review step, move seats onto their own page, rebuild the confirmation page, switch booking references to a new format, or make the site quietly book a different room than the one asked for. Or **change it your way**: type a new label for any box (its name follows the label), new button text, or a new order, so the change is one nobody could have prepared for.
-3. Run it again. The run fails, triage calls it structural, a repair derives a new plan, rehearses it up to the booking button without pressing it, tests the steps after booking on a booking that already exists, promotes it, and then makes the one real booking. The repair opens with two screenshots side by side: what the last good booking saw at the step that broke, and what the broken one saw there instead.
+2. Break the site. **Surprise me** applies two or three changes picked and named at random on the spot (a field renamed to something like `inbox_q7x`, the fields shuffled, the form's id and button changed, the confirmation page's ids renamed), so nobody, including whoever wrote the demo, scripted that exact change. Or pick a specific break: rename a field, add a review step, move seats onto their own page, rebuild the confirmation page, switch booking references to a new format, make the site quietly book a different room than the one asked for, or change only its wording and colours. The harder ones change how the site is built: rebuild it as a JavaScript app with generated class names and no ids or names, move the form into an iframe, require signing in, redesign everything at once into a wizard, or add a captcha. Or **change it your way**: type a new label for any box (its name follows the label), new button text, or a new order, so the change is one nobody could have prepared for.
+3. Run it again, or press **Ask Anvil to check the website now** without booking. The run fails, triage calls it structural, a repair derives a new plan, rehearses it up to the booking button without pressing it, tests the steps after booking on a booking that already exists, promotes it, and then makes the one real booking. The repair opens with two screenshots side by side: what the last good booking saw at the step that broke, and what the broken one saw there instead.
 
-The demo is shared, so everyone with the page open sees every booking, change and repair as it happens, marked when it is someone else's. Below the demo, the same page reads real websites (Hacker News through a Wire action, quotes.toscrape.com through a derived plan) with one click, and can be taught a new one.
+Every visitor gets a private copy of the demo site, so nobody else's change breaks your booking (`/?shared=1` opens the shared copy that Anakin Website Monitoring watches). The booking's first steps were learned from one sentence, not written by hand. Below the demo, the same page shows the benchmark on real redesigns, reads real websites (Hacker News through a Wire action, quotes.toscrape.com through a derived plan) with one click, and can be taught a new one.
 
 Everything shows up in order, in plain words first (what changed on the site, the new steps, the check the booking passed) with the code, selectors and raw trace one click away. The demo site belongs to this project. That is on purpose: you cannot show an agent surviving a site change on a site you are not allowed to change.
 
@@ -36,7 +36,7 @@ flowchart LR
 ```
 
 - **API** (`src/api.mjs`, plain `node:http`): validates input, writes rows, serves the page. It never does long work.
-- **Worker** (`src/worker.mjs`): the only process that talks to Anakin or the model. One job at a time, with a heartbeat lease so a crashed worker's job is picked up again and a live one is never stolen.
+- **Workers** (`src/worker.mjs`): the only processes that talk to Anakin or the model. Each does one job at a time, with a heartbeat lease so a crashed worker's job is picked up again and a live one is never stolen; a job waits while its capability has another job running. Production runs three.
 - **Trace** (`TraceEvent` rows): what the page renders. Page structure goes into it, raw page HTML never does.
 - **Stack:** Node 22, Prisma 7 on SQLite, Playwright (only as the CDP client for Anakin's browser), no frontend framework. Deployed on one VM behind Caddy and Cloudflare.
 
@@ -242,7 +242,7 @@ npm run seed
 
 npm run target              # the demo site on :4310
 npm run api                 # the page and API on :3310
-npm run worker              # runs, repairs, derivations
+npm run worker              # runs, repairs, derivations (WORKERS=3 node --env-file=.env scripts/workers.mjs for several)
 ```
 
 Open http://localhost:3310. Useful `.env` values: `LLM_MODEL` takes the fallback chain described under *Models*, `TARGET_ADMIN_TOKEN` is any long random string, `ALLOWED_SITES` lists the domains read capabilities may touch.
@@ -251,14 +251,17 @@ Checks and scripts:
 
 ```bash
 node --env-file=.env scripts/learn-booking.mjs   # learn the booking from its sentence locally, save demo/learned-booking.json
-npm test                    # triage, robots.txt, extraction, Wire records, the model chain
+node --env-file=.env scripts/bench.mjs           # the repair bench: every change kind against a local copy, local Chrome, no credits
+node --env-file=.env scripts/redesigns.mjs       # real redesigns: steps learned on Wayback copies, run on live sites (credits)
+node scripts/load.mjs http://localhost:3310 3    # several visitors at once, each in a private copy
+npm test                    # triage, contract, fit check, sandboxes, job order, robots.txt, extraction, the model chain
 npm run phase2              # run -> break -> fail -> repair -> run, through the API
 npm run breaks              # all four break kinds, stacked
 npm run phase3 -- "https://quotes.toscrape.com/|the quotes with their author and tags"
 npm run monitor -- create https://your.domain   # needs the site to be public
 ```
 
-Deployment: `deploy/` has the three systemd units and the Caddy block used for the live site. Leave `TARGET_URL` empty to keep the demo site private and forwarded into Anakin's browser.
+Deployment: `deploy/` has the systemd units (`anvil-worker@.service` for extra workers) and the Caddy block used for the live site. Leave `TARGET_URL` empty to keep the demo site private and forwarded into Anakin's browser.
 
 ## Conduct
 
@@ -276,7 +279,7 @@ target/         the demo site and its break kinds
 web/            the page
 capabilities/   the booking (with its hand-written test fixture) and the events read capability
 prisma/         schema and migrations
-scripts/        checkpoints, seeding, recording the demo run, monitor setup
+scripts/        bench, redesign benchmark, load test, learning the booking, seeding, monitor setup
 deploy/         systemd units and Caddy block
-demo/           the recorded run replayed past the credit cap
+demo/           the recorded run replayed past the credit cap, the learned booking plan, the redesign results
 ```
