@@ -453,9 +453,21 @@ function makeBooking(values) {
   return record;
 }
 
+// People reach the site through a look-only public view under /harbor-lane/: it only passes page loads, so its
+// links need that prefix and its booking buttons cannot work. Bookings are Anvil's, which keeps the count exact.
+export function forPublicView(html) {
+  return String(html)
+    .replace(/\b(href|action|src)="\/(?!\/|harbor-lane\/)/g, '$1="/harbor-lane/')
+    .replace(/<button type="submit"/g, '<button type="submit" disabled title="On this look-only view, only Anvil books"')
+    .replace(
+      '<body>',
+      '<body>\n<p style="margin:0;padding:10px 24px;background:#fff4d6;color:#5a4300;font:14px/1.45 system-ui,sans-serif">You are looking at a look-only view of the demo site, so its buttons are switched off. Bookings here are made by Anvil\'s cloud browser, which keeps the site\'s own booking count exact. To see one, go back to <a href="https://anvil.kgbnetwork.com/" style="color:inherit">anvil.kgbnetwork.com</a> and press <b>Send Anvil to book it</b>.</p>',
+    );
+}
+
 function send(res, status, html, headers = {}) {
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...headers });
-  res.end(html);
+  res.end(here.getStore()?.view && html ? forPublicView(html) : html);
 }
 
 function sendJson(res, status, data) {
@@ -681,7 +693,7 @@ const server = createServer((req, res) => {
   if (viaPath) url.pathname = viaPath.path;
   const copy = copyFor(sandbox);
   if (!copy) return sendJson(res, 503, { error: 'too many copies of the demo site are open right now' });
-  here.run({ copy, sandbox, base: viaPath ? `/t/${sandbox}` : '' }, () => handle(req, res, url));
+  here.run({ copy, sandbox, base: viaPath ? `/t/${sandbox}` : '', view: req.headers['x-anvil-view'] === 'public' }, () => handle(req, res, url));
 });
 
 server.listen(port, () => {

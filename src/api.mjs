@@ -283,7 +283,7 @@ const routes = [
       to.pathname = path;
       to.search = url.search;
       if (/^\/+_admin/.test(to.pathname)) return send(res, 404, { error: 'nothing here' });
-      const page = await fetch(to, { redirect: 'manual' }).catch(() => null);
+      const page = await fetch(to, { redirect: 'manual', headers: { 'x-anvil-view': 'public' } }).catch(() => null);
       if (!page) return send(res, 502, { error: 'the demo site is not answering' });
       // the demo site's own redirects (to its sign-in page, say) stay inside this view
       const location = page.headers.get('location');
