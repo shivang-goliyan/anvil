@@ -1,14 +1,17 @@
 // Tier B capability against the project's own target site.
 // The plan below is hand-written. Every later version of it is derived.
 
-export function reserveRoom() {
+import { capId, sandboxHost } from '../src/tenants.mjs';
+
+// sandbox: a visitor's own copy of the demo site, reached on its own made-up host
+export function reserveRoom(sandbox = '') {
   return {
-    id: 'reserve-room',
+    id: capId('reserve-room', sandbox),
     name: 'Reserve a study room',
     goal:
       'Reserve a study room at Harbor Lane Library for the given patron, room, date and time, read the reference and details off the confirmation page, then look the booking up on the library\'s "Find my booking" page by reference and email and read back what the library actually stored.',
     // with no public TARGET_URL the remote browser gets this made-up origin and we answer it locally
-    targetUrl: process.env.TARGET_URL || 'https://harbor-lane.anvil.test/',
+    targetUrl: (!sandbox && process.env.TARGET_URL) || `https://${sandboxHost(sandbox)}/`,
     inputSchema: { name: 'string', email: 'string', seats: 'number', room: 'string', date: 'string', time: 'string' },
     canary: '.site-header',
     steps: [

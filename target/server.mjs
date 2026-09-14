@@ -1,19 +1,59 @@
 import { createServer } from 'node:http';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync } from 'node:fs';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { freshConfig, applyBreak, describe, BREAKS, ROOMS, SLOTS, DEMO_ACCOUNT, WIZARD, EVENTS } from './config.mjs';
+import { SHARED, validSandbox, sandboxOfPath } from '../src/tenants.mjs';
 
 const port = Number(process.env.TARGET_PORT ?? 4310);
 const adminToken = process.env.TARGET_ADMIN_TOKEN ?? '';
 const APP_JS = readFileSync(new URL('./booking-app.js', import.meta.url), 'utf8');
 
-let config = freshConfig();
-const reservations = new Map();
-// half-finished bookings for the multi-page flows, keyed by a token in a hidden field
-const pending = new Map();
-// browsers that signed in with the demo account, and captcha answers by token
-const sessions = new Set();
-const captchas = new Map();
+// Every visitor's sandbox has its own copy of the site; the shared demo is ''. A request runs inside its copy,
+// so the page code below reads config, reservations and the rest as if there were only one site.
+const copies = new Map();
+const here = new AsyncLocalStorage();
+const MAX_COPIES = Number(process.env.TARGET_MAX_COPIES ?? 120);
+const IDLE_MS = 90 * 60 * 1000;
+
+function copyFor(sandbox) {
+  let copy = copies.get(sandbox);
+  if (!copy) {
+    if (copies.size >= MAX_COPIES) return null;
+    // pending: half-finished bookings for the multi-page flows; sessions: browsers signed in with the demo account
+    copy = { config: freshConfig(), reservations: new Map(), pending: new Map(), sessions: new Set(), captchas: new Map() };
+    copies.set(sandbox, copy);
+  }
+  copy.seen = Date.now();
+  return copy;
+}
+setInterval(() => {
+  for (const [id, copy] of copies) if (id !== SHARED && Date.now() - copy.seen > IDLE_MS) copies.delete(id);
+}, 5 * 60_000).unref();
+
+const state = () => here.getStore().copy;
+const base = () => here.getStore().base;
+// reads through to whichever copy the current request belongs to
+const current = (key) =>
+  new Proxy(
+    {},
+    {
+      get(_, prop) {
+        const target = state()[key];
+        const value = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+      set(_, prop, value) {
+        state()[key][prop] = value;
+        return true;
+      },
+    },
+  );
+const config = current('config');
+const reservations = current('reservations');
+const pending = current('pending');
+const sessions = current('sessions');
+const captchas = current('captchas');
 
 const HALF_HOUR = 30 * 60 * 1000;
 function hold(values) {
@@ -67,7 +107,7 @@ function layout(title, body, { bare = false } = {}) {
 </style>
 </head>
 <body>
-${bare ? '' : `<header class="site-header"><a href="/">${esc(config.org)}</a><nav><a href="/events">Events</a> · <a href="/find">Find my booking</a></nav></header>`}
+${bare ? '' : `<header class="site-header"><a href="${base()}/">${esc(config.org)}</a><nav><a href="${base()}/events">Events</a> · <a href="${base()}/find">Find my booking</a></nav></header>`}
 ${!bare && config.banner ? `<p class="banner">${esc(config.banner)}</p>` : ''}
 ${body}
 ${bare ? '' : '<footer class="site-footer">Demo target for Anvil. This site is owned by the project so it can be broken on purpose.</footer>'}
@@ -148,7 +188,7 @@ function framedPage() {
     `<main>
 <h1>${esc(config.title)}</h1>
 <p>${esc(config.intro)}</p>
-<iframe id="booking-frame" title="Booking form" src="/embed/reserve" style="width:100%;height:${config.seatsFirst ? 300 : 760}px;border:1px solid #d8d2c4;background:#fff"></iframe>
+<iframe id="booking-frame" title="Booking form" src="${base()}/embed/reserve" style="width:100%;height:${config.seatsFirst ? 300 : 760}px;border:1px solid #d8d2c4;background:#fff"></iframe>
 </main>`,
   );
 }
@@ -190,7 +230,7 @@ function confirmationPage(r) {
     <li><span>Arrival</span><b data-line="arrival">${esc(r.time)}</b></li>
   </ul>
 </section>
-<p><a href="/find">Look this booking up later</a></p>
+<p><a href="${base()}/find">Look this booking up later</a></p>
 </main>`,
     );
   if (config.receiptLayout)
@@ -207,7 +247,7 @@ function confirmationPage(r) {
   <div class="receipt-row"><span class="k">Day</span><span class="v" data-field="date">${esc(r.date)}</span></div>
   <div class="receipt-row"><span class="k">Starts</span><span class="v" data-field="time">${esc(r.time)}</span></div>
 </section>
-<p><a href="/">Book another room</a></p>
+<p><a href="${base()}/">Book another room</a></p>
 </main>`,
     );
   return layout(
@@ -223,8 +263,8 @@ function confirmationPage(r) {
   <dt>Date</dt><dd class="${esc(config.confirm.date)}">${esc(r.date)}</dd>
   <dt>Time</dt><dd class="${esc(config.confirm.time)}">${esc(r.time)}</dd>
 </dl>
-<p><a href="/find">Find this booking later</a></p>
-<p><a href="/">Make another reservation</a></p>
+<p><a href="${base()}/find">Find this booking later</a></p>
+<p><a href="${base()}/">Make another reservation</a></p>
 </main>`,
   );
 }
@@ -443,8 +483,7 @@ async function readBody(req) {
 // pages that belong to booking, which the sign-in change puts behind the demo account
 const BOOKING = /^\/($|reserve(\/|$)|embed\/|visit\/|api\/reserve$)/;
 
-const server = createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://localhost');
+async function handle(req, res, url) {
   try {
     const seatsPage = (values, errors, bare) => formPage(values, errors, { keys: ['seats'], id: 'party-form', action: '/reserve/seats', button: 'Continue', step: 'Step 1 of 2', bare });
     const detailsPage = (values, errors, token) => formPage(values, errors, { keys: config.fields.map((f) => f.key).filter((k) => k !== 'seats'), token, step: 'Step 2 of 2' });
@@ -452,7 +491,7 @@ const server = createServer(async (req, res) => {
 
     if (config.signIn && BOOKING.test(url.pathname) && !signedIn(req)) {
       if (url.pathname.startsWith('/api/')) return sendJson(res, 401, { error: 'sign in first' });
-      return send(res, 303, '', { location: `/sign-in?next=${encodeURIComponent(req.method === 'GET' ? url.pathname : '/')}` });
+      return send(res, 303, '', { location: `${base()}/sign-in?next=${encodeURIComponent(req.method === 'GET' ? url.pathname : '/')}` });
     }
 
     if (req.method === 'GET' && url.pathname === '/sign-in') {
@@ -599,25 +638,28 @@ const server = createServer(async (req, res) => {
 
     if (url.pathname.startsWith('/_admin/')) {
       if (!isAdmin(req)) return sendJson(res, 401, { error: 'bad or missing admin token' });
-      if (req.method === 'GET' && url.pathname === '/_admin/config') return sendJson(res, 200, { ...config, described: describe(config), kinds: BREAKS });
-      if (req.method === 'GET' && url.pathname === '/_admin/stats') return sendJson(res, 200, { bookings: reservations.size });
+      if (req.method === 'GET' && url.pathname === '/_admin/config') return sendJson(res, 200, { ...state().config, described: describe(state().config), kinds: BREAKS });
+      if (req.method === 'GET' && url.pathname === '/_admin/stats') return sendJson(res, 200, { bookings: reservations.size, copies: copies.size });
       if (req.method === 'POST' && url.pathname === '/_admin/reset') {
-        config = freshConfig();
-        pending.clear();
-        reservations.clear();
-        sessions.clear();
-        captchas.clear();
-        return sendJson(res, 200, { ok: true, config, described: describe(config) });
+        const copy = state();
+        copy.config = freshConfig();
+        for (const key of ['pending', 'reservations', 'sessions', 'captchas']) copy[key].clear();
+        return sendJson(res, 200, { ok: true, config: copy.config, described: describe(copy.config) });
+      }
+      if (req.method === 'POST' && url.pathname === '/_admin/drop') {
+        const { sandbox } = here.getStore();
+        if (sandbox !== SHARED) copies.delete(sandbox);
+        return sendJson(res, 200, { dropped: sandbox !== SHARED });
       }
       if (req.method === 'POST' && url.pathname === '/_admin/break') {
         const { kind, key, ...params } = JSON.parse((await readBody(req)) || '{}');
         if (!BREAKS[kind]) return sendJson(res, 400, { error: `unknown break kind "${kind}"` });
         // work on a copy, so a change that fails its checks leaves the site exactly as it was
-        const next = structuredClone(config);
+        const next = structuredClone(state().config);
         try {
           const out = applyBreak(next, kind, key, params);
-          config = next;
-          return sendJson(res, 200, { ...out, config, described: describe(config) });
+          state().config = next;
+          return sendJson(res, 200, { ...out, config: next, described: describe(next) });
         } catch (err) {
           return sendJson(res, 400, { error: err.message });
         }
@@ -629,6 +671,17 @@ const server = createServer(async (req, res) => {
     console.error(err);
     sendJson(res, 500, { error: 'something went wrong on our side' });
   }
+}
+
+const server = createServer((req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  // the public read-only view reaches a sandbox's copy under /t/<id>/; Anvil's browser and API say which in a header
+  const viaPath = sandboxOfPath(url.pathname);
+  const sandbox = viaPath?.sandbox ?? validSandbox(req.headers['x-anvil-tenant']) ?? SHARED;
+  if (viaPath) url.pathname = viaPath.path;
+  const copy = copyFor(sandbox);
+  if (!copy) return sendJson(res, 503, { error: 'too many copies of the demo site are open right now' });
+  here.run({ copy, sandbox, base: viaPath ? `/t/${sandbox}` : '' }, () => handle(req, res, url));
 });
 
 server.listen(port, () => {

@@ -6,3 +6,5 @@ import { dbUrl } from './db-url.mjs';
 // carry on while one of them writes; better-sqlite3 already waits 5s on a locked database.
 export const db = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: dbUrl }) });
 await db.$queryRawUnsafe('PRAGMA journal_mode = WAL');
+// several workers and the API write the same file; wait a while for a lock instead of failing
+await db.$queryRawUnsafe('PRAGMA busy_timeout = 15000');

@@ -347,6 +347,8 @@ const humanize = (s) =>
 
 // booked: this visitor has had a booking finish. changed: the site differs from what Anvil's steps
 // were last proven on. mine: this visitor made that change (the demo is shared, others may have).
+// set once the demo site says whose copy this page is looking at
+let privateCopy = false;
 const story = { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false, others: 0 };
 
 function afterRun(ok, structural) {
@@ -376,7 +378,7 @@ function renderStory() {
   else if (story.again) hint = `That is the whole loop: the website changed, Anvil's steps broke, it fixed itself and booked for real. Try ${b('Surprise me')} for a change nobody scripted.`;
   else if (story.fixed) hint = `Fixed and saved as a new version. Book once more to see the new steps work on an ordinary booking.`;
   else if (story.broke) hint = `Anvil's old steps did not fit the changed website. It is fixing itself right now, below.`;
-  else if (!story.booked) hint = `Other visitors have already changed this website (${story.others} change${story.others === 1 ? '' : 's'} so far, it is a shared demo). Book a room to see whether Anvil copes, or press ${b('Put everything back')} to start fresh.`;
+  else if (!story.booked) hint = privateCopy ? `This copy of the website has already been changed (${story.others} change${story.others === 1 ? '' : 's'}). Book a room to see whether Anvil copes, or press ${b('Put everything back')} to start fresh.` : `Other visitors have already changed this website (${story.others} change${story.others === 1 ? '' : 's'} so far, it is a shared demo). Book a room to see whether Anvil copes, or press ${b('Put everything back')} to start fresh.`;
   else hint = `Now book again. Anvil still has the steps it saved before your change, and nobody has told it the website is different.`;
   $('story-hint').innerHTML = hint;
 }
@@ -940,7 +942,7 @@ async function follow(type, id, { scroll = true, others = false } = {}) {
     }
     if (!view) {
       view = VIEWS[type](card, json.capability);
-      if (others) card.heading.after(h('span', { class: 'who', text: 'another visitor' }));
+      if (others) card.heading.after(h('span', { class: 'who', text: privateCopy ? 'another tab' : 'another visitor' }));
     }
     view.context?.(json);
     for (const e of json.trace) {
@@ -1130,7 +1132,7 @@ async function run() {
     renderComposer(cap);
     follow('run', json.id);
   } else if (status === 409 && json.runId) {
-    notice('run-notice', 'Another visitor is booking right now, so you are watching theirs. Try again when it finishes.');
+    notice('run-notice', privateCopy ? 'Something is already running on your copy of the website, maybe from another tab, so you are watching that. Try again when it finishes.' : 'Another visitor is booking right now, so you are watching theirs. Try again when it finishes.');
     follow('run', json.runId, { others: true });
   } else if (status === 503 && json.capped) {
     notice('run-notice', json.error, true);
@@ -1303,7 +1305,21 @@ async function loadTarget({ mine = false } = {}) {
   }
   $('site-version').textContent = json.breaks.length ? `changed ${json.breaks.length}×` : 'as built';
   $('site-version').classList.toggle('hot', json.breaks.length > 0);
-  $('owned').textContent = json.owned;
+  privateCopy = !!json.sandbox?.own;
+  const view = json.sandbox?.view ?? '/harbor-lane/';
+  $('site-live').href = view;
+  for (const a of document.querySelectorAll('a.more[href^="/harbor-lane"]')) a.href = view;
+  $('owned').replaceChildren(
+    privateCopy
+      ? 'This is your own copy of Harbor Lane Library: what you change here, and what Anvil books and fixes on it, is seen by nobody else, and it is cleared an hour after you stop using it. '
+      : json.sandbox?.full
+        ? 'Every private copy of the demo is in use right now, so this is the shared copy, and other visitors may change it too. '
+        : 'This is the shared copy of the demo, and other visitors may change it too. ',
+    privateCopy ? h('a', { href: '/?shared=1', text: 'Use the shared copy instead' }) : json.sandbox?.full ? null : h('a', { href: '/?own=1', text: 'Get your own copy' }),
+    h('br'),
+    json.owned,
+  );
+  $('check-button').textContent = json.monitor ? 'Ask Anakin to check the website now' : 'Ask Anvil to check the website now';
   $('monitor').hidden = !json.monitor;
   if (json.monitor) {
     const hours = json.monitor.everyMinutes / 60;
@@ -1320,11 +1336,13 @@ async function loadTarget({ mine = false } = {}) {
   } else if (!mine && !changing && knownBreaks !== null && json.breaks.length !== knownBreaks) {
     if (json.breaks.length > knownBreaks) {
       const kind = json.breaks.at(-1).kind;
-      marker(`Another visitor changed the website: ${low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '').replace(/^your own change$/, 'a change they typed in')}`, 'It is a shared demo, so you see their change too. Nobody has told Anvil.');
+      const what = low1(BREAK_SHORT[kind] ?? kind).replace(/^surprise me: /, '').replace(/^your own change$/, 'a change typed in');
+      if (privateCopy) marker(`The website was changed in another tab: ${what}`, 'It is your copy, so that tab changed it here too. Nobody has told Anvil.');
+      else marker(`Another visitor changed the website: ${what}`, 'It is a shared demo, so you see their change too. Nobody has told Anvil.');
       story.others++;
       if (story.booked) Object.assign(story, { changed: true, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false });
     } else {
-      marker('Another visitor put everything back', 'The website is as built again, and Anvil is back to its first hand-written steps.', true);
+      marker(privateCopy ? 'Everything was put back in another tab' : 'Another visitor put everything back', 'The website is as built again, and Anvil is back to its first hand-written steps.', true);
       Object.assign(story, { booked: false, changed: false, mine: false, broke: false, fixed: false, again: false, degraded: false, paused: false, fits: false, cosmetic: false, others: 0 });
     }
     renderStory();
@@ -1521,7 +1539,7 @@ $('read-form').addEventListener('submit', async (e) => {
 
 // ------------------------------------------------------------------ repairs nobody here asked for
 
-// The demo is shared, so everyone watching sees every booking and repair, not only their own.
+// Everything that happens on this visitor's copy shows up, from any tab; other visitors only as a count.
 // A repair after a failed booking is picked up from that booking's card instead.
 let seenSince = Date.now();
 let posting = false;
@@ -1529,6 +1547,11 @@ async function watchActivity() {
   const { status, json } = await api('GET', `/api/activity?since=${seenSince}`);
   if (status !== 200 || posting) return;
   seenSince = json.now;
+  if (json.live) {
+    const { sandboxes, running } = json.live;
+    $('live-strip').hidden = false;
+    $('live-strip').textContent = `Live right now: ${sandboxes} cop${sandboxes === 1 ? 'y' : 'ies'} of the demo in use, ${running} job${running === 1 ? '' : 's'} running across all of them.`;
+  }
   for (const r of json.runs ?? []) if (!following.has(`run:${r.id}`)) follow('run', r.id, { others: true, scroll: false });
   for (const r of json.repairs) {
     if (following.has(`repair:${r.id}`) || ['run-failure', 'cooldown'].includes(r.trigger)) continue;

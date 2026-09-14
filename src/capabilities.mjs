@@ -1,4 +1,5 @@
 import { db } from './db.mjs';
+import { sandboxOfHost } from './tenants.mjs';
 
 export async function loadCapability(id) {
   const cap = await db.capability.findUnique({ where: { id }, include: { plan: true, contract: true } });
@@ -11,7 +12,8 @@ export async function loadCapability(id) {
 export function sessionOptions(cap) {
   const { hostname, origin } = new URL(cap.targetUrl);
   if (!hostname.endsWith('.anvil.test')) return {};
-  return { origin, forward: process.env.TARGET_FORWARD || 'http://localhost:4310' };
+  // <sandbox>.harbor-lane.anvil.test is that visitor's own copy of the demo site
+  return { origin, forward: process.env.TARGET_FORWARD || 'http://localhost:4310', sandbox: sandboxOfHost(hostname) };
 }
 
 export const setStatus = (id, status) => db.capability.update({ where: { id }, data: { status } });
@@ -51,7 +53,8 @@ export const booksSomething = (cap) => cap.engine === 'browser' && (cap.plan?.st
 export async function ownedSiteBookings(cap) {
   if (!sessionOptions(cap).forward) return null;
   const admin = process.env.TARGET_ADMIN_URL || process.env.TARGET_FORWARD || 'http://localhost:4310';
-  const res = await fetch(new URL('/_admin/stats', admin), { headers: { 'x-admin-token': process.env.TARGET_ADMIN_TOKEN ?? '' }, signal: AbortSignal.timeout(5000) }).catch(() => null);
+  const { sandbox } = sessionOptions(cap);
+  const res = await fetch(new URL('/_admin/stats', admin), { headers: { 'x-admin-token': process.env.TARGET_ADMIN_TOKEN ?? '', ...(sandbox && { 'x-anvil-tenant': sandbox }) }, signal: AbortSignal.timeout(5000) }).catch(() => null);
   return res?.ok ? (await res.json()).bookings : null;
 }
 
@@ -69,17 +72,20 @@ export async function promotePlan(cap, { steps, origin, snapshot }) {
   return next;
 }
 
+// A capability and everything it learned or ran: plans, contracts, runs and repairs go with it.
+export async function removeCapability(id) {
+  const where = { capabilityId: id };
+  const ids = [...(await db.run.findMany({ where, select: { id: true } })), ...(await db.repairAttempt.findMany({ where, select: { id: true } }))];
+  await db.job.deleteMany({ where: { refId: { in: ids.map((r) => r.id) } } });
+  await db.capability.update({ where: { id }, data: { planId: null, contractId: null } });
+  await db.capability.delete({ where: { id } });
+}
+
 // Puts a capability back to its hand-written first plan with nothing learned. Used by seeding.
 export async function seedCapability(def, { reset = false } = {}) {
   const existing = await db.capability.findUnique({ where: { id: def.id } });
   if (existing && !reset) return { created: false };
-  if (existing) {
-    const where = { capabilityId: def.id };
-    const ids = [...(await db.run.findMany({ where, select: { id: true } })), ...(await db.repairAttempt.findMany({ where, select: { id: true } }))];
-    await db.job.deleteMany({ where: { refId: { in: ids.map((r) => r.id) } } });
-    await db.capability.update({ where: { id: def.id }, data: { planId: null, contractId: null } });
-    await db.capability.delete({ where: { id: def.id } });
-  }
+  if (existing) await removeCapability(def.id);
   await db.capability.create({
     data: { id: def.id, name: def.name, goal: def.goal, targetUrl: def.targetUrl, inputSchema: def.inputSchema, canary: def.canary, engine: def.engine ?? 'browser' },
   });

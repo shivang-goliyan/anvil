@@ -237,6 +237,7 @@ h1 em::after {
 .breaks .brk.wild:not(:disabled):hover { background: #000; border-color: #000; }
 
 /* change it your way */
+.live-strip { margin-top: 6px; font: 500 11.5px var(--mono); color: var(--faint); }
 .check-now { margin-top: 12px; padding: 12px; border-radius: 16px; background: var(--line-2); }
 .check-now .btn { width: 100%; justify-content: center; border-color: var(--blue, #2f5bea); color: var(--blue, #2f5bea); }
 .check-now .btn:disabled { opacity: 0.55; cursor: not-allowed; }

@@ -161,7 +161,7 @@ async function connect(log) {
 // paths, no credits, no network between the browser and the demo site.
 const LOCAL_BROWSER = process.env.ANVIL_BROWSER === 'local';
 
-export async function openBrowser({ origin, forward, log } = {}) {
+export async function openBrowser({ origin, forward, sandbox, log } = {}) {
   let browser;
   if (LOCAL_BROWSER) {
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true });
@@ -188,7 +188,7 @@ export async function openBrowser({ origin, forward, log } = {}) {
         for (let hops = 0; ; hops++) {
           res = await fetch(`${forward}${at}`, {
             method: req.method(),
-            headers: { 'content-type': sent['content-type'] ?? 'text/plain', ...(sent.cookie && { cookie: sent.cookie }) },
+            headers: { 'content-type': sent['content-type'] ?? 'text/plain', ...(sent.cookie && { cookie: sent.cookie }), ...(sandbox && { 'x-anvil-tenant': sandbox }) },
             body: get ? undefined : req.postData() ?? '',
             redirect: 'manual',
           });

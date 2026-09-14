@@ -6,6 +6,7 @@ import { executeRun } from './run.mjs';
 import { executeRepair } from './repair.mjs';
 import { executeDerive } from './derive-read.mjs';
 import { hourlyCap, creditsUsed } from './budget.mjs';
+import { pickJob, yieldsTo } from './job-order.mjs';
 
 const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 // A working worker touches lockedAt every BEAT_MS. A running job nobody has touched for LEASE_MS
@@ -56,17 +57,39 @@ async function reclaimAbandoned() {
   }
 }
 
+// Which capability a job works on. Jobs for the same capability run one at a time, whichever worker has them.
+const capabilities = new Map();
+async function capabilityOf(job) {
+  if (!capabilities.has(job.id)) {
+    const find = { run: () => db.run.findUnique({ where: { id: job.refId } }), repair: () => db.repairAttempt.findUnique({ where: { id: job.refId } }), derive: () => db.derivation.findUnique({ where: { id: job.refId } }) }[job.kind];
+    capabilities.set(job.id, (await find?.())?.capabilityId ?? `job:${job.id}`);
+  }
+  return capabilities.get(job.id);
+}
+
+
 async function claim() {
-  const next = await db.job.findFirst({
-    where: { status: 'queued', runAfter: { lte: new Date() } },
-    orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }],
-  });
+  const queued = await db.job.findMany({ where: { status: 'queued', runAfter: { lte: new Date() } }, orderBy: [{ runAfter: 'asc' }, { createdAt: 'asc' }], take: 25 });
+  if (!queued.length) return null;
+  const running = await db.job.findMany({ where: { status: 'running' } });
+  const busy = new Set(await Promise.all(running.map(capabilityOf)));
+  for (const j of queued) j.capabilityId = await capabilityOf(j);
+  const next = pickJob(queued, busy);
   if (!next) return null;
   const { count } = await db.job.updateMany({
     where: { id: next.id, status: 'queued' },
     data: { status: 'running', lockedAt: new Date(), tries: { increment: 1 } },
   });
-  return count === 1 ? next : null;
+  if (count !== 1) return null;
+  // another worker may have claimed a job for the same capability in the same moment; the older job keeps going
+  const others = (await db.job.findMany({ where: { status: 'running', id: { not: next.id } } })).filter((o) => o.kind && o.refId);
+  for (const o of others) {
+    if ((await capabilityOf(o)) === next.capabilityId && yieldsTo(next, o)) {
+      await db.job.updateMany({ where: { id: next.id, status: 'running' }, data: { status: 'queued', lockedAt: null, tries: { decrement: 1 } } });
+      return null;
+    }
+  }
+  return next;
 }
 
 async function work(job) {
@@ -88,6 +111,7 @@ async function work(job) {
     await giveUp(job, `the worker hit an error it did not expect: ${err.message}`);
   } finally {
     clearInterval(beat);
+    capabilities.delete(job.id);
   }
 }
 
@@ -100,7 +124,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
   });
 }
 
-console.log(`worker up. polling every ${POLL_MS}ms, Anakin cap ${hourlyCap()} credits/hour, ${await creditsUsed()} used in the last hour`);
+console.log(`worker${process.env.WORKER_NAME ? ` ${process.env.WORKER_NAME}` : ''} up. polling every ${POLL_MS}ms, Anakin cap ${hourlyCap()} credits/hour, ${await creditsUsed()} used in the last hour`);
 
 let lastReclaim = 0;
 while (!stopping) {

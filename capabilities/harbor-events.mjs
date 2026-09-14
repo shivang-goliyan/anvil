@@ -1,12 +1,16 @@
 // A capability that only reads, on the project's own demo site, so a page redesign can be shown on it.
 // The plan below is hand-written. Every later version of it is derived.
 
-export function harborEvents() {
-  // the public read-only view where there is one (production), otherwise the made-up origin answered locally
-  const base = (process.env.DEMO_PUBLIC_URL || 'https://harbor-lane.anvil.test').replace(/\/$/, '');
+import { capId, sandboxHost } from '../src/tenants.mjs';
+
+export function harborEvents(sandbox = '') {
+  // the public read-only view where there is one (production; a sandbox's copy sits under /t/<id>/),
+  // otherwise the made-up origin answered locally
+  const pub = process.env.DEMO_PUBLIC_URL?.replace(/\/$/, '');
+  const base = pub ? `${pub}${sandbox ? `/t/${sandbox}` : ''}` : `https://${sandboxHost(sandbox)}`;
   const targetUrl = `${base}/events`;
   return {
-    id: 'harbor-events',
+    id: capId('harbor-events', sandbox),
     name: "Read the library's upcoming events",
     goal: "the library's upcoming events, each with its title, date, start time, room and the number of seats left",
     engine: 'scrape',

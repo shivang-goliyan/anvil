@@ -2,6 +2,7 @@
 
 import { scrape, wireTask } from './anakin.mjs';
 import { mayFetch, NotAllowed } from './conduct.mjs';
+import { sandboxOfHost } from './tenants.mjs';
 
 // Page fetcher for runReadPlan. Runs want today's page, so the scraper's 24h cache is skipped
 // with a throwaway query param, unless robots.txt objects to query strings. `render` asks Anakin to
@@ -11,7 +12,8 @@ export function scrapeFetcher(log, { fresh = true, render = false } = {}) {
   return async (url) => {
     if (new URL(url).hostname.endsWith('.anvil.test')) {
       const { pathname, search } = new URL(url);
-      const res = await fetch(`${process.env.TARGET_FORWARD || 'http://localhost:4310'}${pathname}${search}`, { signal: AbortSignal.timeout(15_000) });
+      const sandbox = sandboxOfHost(new URL(url).hostname);
+      const res = await fetch(`${process.env.TARGET_FORWARD || 'http://localhost:4310'}${pathname}${search}`, { headers: sandbox ? { 'x-anvil-tenant': sandbox } : {}, signal: AbortSignal.timeout(15_000) });
       const html = await res.text();
       log?.('anakin', 'read the demo site directly (local bench, no credits)', { call: 'scrape', credits: 0, url });
       return { html, url, markdown: html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(), cached: false };

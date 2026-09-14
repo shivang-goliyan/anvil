@@ -28,7 +28,7 @@ const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmat
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const dir = mkdtempSync(`${tmpdir()}/anvil-bench-`);
-const ports = { target: 4420, api: 3420 };
+const ports = { target: Number(process.env.BENCH_TARGET_PORT ?? 4420), api: Number(process.env.BENCH_API_PORT ?? 3420) };
 const env = {
   ...process.env,
   DATABASE_URL: `file:${dir}/bench.db`,
