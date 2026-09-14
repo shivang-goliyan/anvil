@@ -6,7 +6,8 @@ export const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffi
 
 // transient -> retry, blocked -> degraded, structural -> repair, empty -> fine.
 // rendered: the page came back with real content even though the canary is gone (a read of a redesigned page)
-export function triage({ error, contractCheck, records, canaryPresent, rendered = false, pageText = '', sent = null }) {
+// expected: how many records the contract learned to expect at least
+export function triage({ error, contractCheck, records, canaryPresent, rendered = false, pageText = '', sent = null, expected = 1 }) {
   if (error) {
     const status = error.docStatus ?? error.status;
     if (error instanceof NotAllowed) return { kind: 'blocked', why: `we may not fetch it: ${error.message}` };
@@ -28,7 +29,8 @@ export function triage({ error, contractCheck, records, canaryPresent, rendered 
   if (contractCheck && !contractCheck.pass && sent && !sent.missing.length && contractCheck.problems.every((p) => /^"stored_/.test(p)))
     return { kind: 'mismatch', why: `the website stored something different from what Anvil sent: ${contractCheck.problems.join('; ')}` };
   if (contractCheck && !contractCheck.pass) {
-    if (records.length === 0 && canaryPresent && contractCheck.problems.every((p) => p.startsWith('got 0')))
+    // a list that used to hold several things and now holds none is more likely a changed page than an empty one
+    if (records.length === 0 && canaryPresent && expected < 3 && contractCheck.problems.every((p) => p.startsWith('got 0')))
       return { kind: 'empty', why: 'page rendered and there is simply nothing to return' };
     return { kind: 'structural', why: contractCheck.problems.join('; ') };
   }

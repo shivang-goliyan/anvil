@@ -68,3 +68,8 @@ test('stored record disagreeing is mismatch', () => {
   assert.equal(kind({ contractCheck, records: [{}], sent }), 'mismatch');
   assert.equal(kind({ contractCheck, records: [{}], sent: { found: [], missing: ['room'] } }), 'structural');
 });
+
+test('emptied long list is structural', () => {
+  const contractCheck = { pass: false, problems: ['got 0 records, expected at least 10'] };
+  assert.equal(triage({ contractCheck, records: [], canaryPresent: true, expected: 10 }).kind, 'structural');
+});

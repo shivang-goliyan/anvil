@@ -82,7 +82,8 @@ const cache = new Map();
 
 async function robotsFor(origin) {
   const hit = cache.get(origin);
-  if (hit && Date.now() - hit.at < ROBOTS_TTL) return hit;
+  // a robots.txt that could not be fetched is asked for again a minute later, not an hour
+  if (hit && Date.now() - hit.at < (hit.unreachable ? 60_000 : ROBOTS_TTL)) return hit;
   let entry;
   try {
     const res = await fetch(`${origin}/robots.txt`, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(8000) });

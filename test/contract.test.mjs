@@ -28,3 +28,12 @@ test('new reference format is drift', () => {
   assert.deepEqual(next.formats.reference.shapes, ['AA-XXXXXX', 'AA-9999-9999-99']);
   assert.equal(checkContract({ ...c, ...next }, [{ ...good, reference: ref, stored_reference: ref }], inputs).drift.length, 0);
 });
+
+test('shorter list is drift', () => {
+  const contract = { minRecords: 10, requiredFields: ['t'], fieldTypes: { t: 'string' } };
+  const short = checkContract(contract, [{ t: 'a' }, { t: 'b' }], {});
+  assert.equal(short.pass, true);
+  assert.equal(short.drift[0].kind, 'count');
+  assert.equal(amendContract(contract, [], short.drift).minRecords, 1);
+  assert.equal(checkContract(contract, [], {}).pass, false);
+});

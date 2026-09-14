@@ -143,7 +143,7 @@ async function runCapability(cap, inputs, log) {
         pageAtFailure,
       });
 
-    const verdict = triage({ error, contractCheck, records, canaryPresent, rendered, pageText, sent });
+    const verdict = triage({ error, contractCheck, records, canaryPresent, rendered, pageText, sent, expected: cap.contract?.minRecords ?? 1 });
     if (verdict.kind === 'ok') return { status: 'succeeded', records, afterCommitUrl };
     log('triage', `${verdict.kind}: ${verdict.why}`, { kind: verdict.kind, canaryPresent });
 

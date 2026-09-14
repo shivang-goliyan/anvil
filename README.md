@@ -96,6 +96,26 @@ The *Read another site* form turns a URL and a sentence into a read capability (
 6. The model writes a `navigate` / `assert` / `extract` plan (with `each` for lists) against trimmed HTML. It is dry-run on the scraped page before a credit is spent running it, with problems fed back for up to three tries.
 7. A fresh read through the normal runner gives the golden sample and the contract.
 
+### Real redesigns nobody scripted
+
+`scripts/redesigns.mjs` learns a reading task on a real site as the Wayback Machine kept it in 2018 or 2019 (`web.archive.org/web/<time>id_/<url>`, which has no robots.txt), then runs those saved steps on the live site through Anakin's URL Scraper with the same run, triage and repair code as the deployed app. Results from 2026-09-14, also shown on the site:
+
+| Website | Learned on | Today, with those steps | What had changed | Repair | After |
+|---|---|---|---|---|---|
+| Hacker News | 2019-01-01 | broke: every title and link came back empty | titles moved from `a.storylink` into `span.titleline` | repaired in 1 try, 6s | 30 stories with title, link and points |
+| GitHub Trending | 2019-01-01 | broke: `ol.repo-list li` matches nothing | the list was rebuilt as `article.Box-row` | repaired in 1 try, 16s | 19 repositories (the live page lists 19; counted with curl) |
+| Python events | 2018-01-29 | still works, 6 events | the list is shorter (22 then) | none needed; the check learned that 6 is fine | — |
+| Rust blog | 2019-01-17 | still works, 50 posts | nothing the steps use | none needed | — |
+| kernel.org | 2018-01-01 | still works, 10 releases | nothing the steps use | none needed | — |
+| LWN | 2018-01-01 | broke: `.fp-feature, .pure-u-md-11-24` matches nothing | front page markup | **not fixed** after 3 tries: the first new plan read no links at all, the next two missed the link on three articles, and the check refused all three | old steps kept, marked as needing a person |
+
+18 credits for these results. The runs found two things in Anvil that are now fixed, and one it did not fix:
+
+- A list that used to hold 20 items and suddenly holds none was triaged as an empty page (a success). Now a list the contract learned to expect several records from counts as changed when it comes back empty.
+- The number of records was an invariant, so python.org's shorter events list failed the check and could not be repaired. It is now a learned detail: fewer records, each one complete, updates the check; zero records still fails.
+- A robots.txt fetch that failed once kept a site blocked for an hour in that process; it is now retried after a minute. python.org hit this in the full run and was run again on its own.
+- The repaired Hacker News plan first dropped `points`, because some 2019 items had no points so the contract could not require it. A read repair now has to keep every field the old steps read.
+
 ## How Anvil uses Anakin
 
 | Product | What Anvil does with it | What breaks without it |
@@ -120,6 +140,18 @@ Self-healing web automation is not a new idea, and Anvil does not claim it is.
 - **[Stagehand](https://docs.stagehand.dev/v3/basics/act)** caches browser actions so repeat runs skip the model, and calls the model again when a cached action fails on a changed page.
 - **[Kadoa](https://www.kadoa.com/blog/autogenerate-self-healing-web-scrapers)** generates scrapers with a model and regenerates selectors when sites change.
 - **[AgentLayer](https://dev.to/farhanrhine/how-i-turned-any-website-into-an-mcp-server-and-what-i-learned-building-it-1jpm)** crawls a URL, has a model generate MCP tool definitions, and validates each tool in a sandbox before serving it. Its write-up names site changes as what makes scraping brittle, and does not describe what happens when a generated tool breaks after a site update.
+
+Side by side, from what each project's own documentation says (checked 2026-09-14; "not described" means the linked page does not say, not that the product cannot do it):
+
+| | What gets fixed | When it fixes | What decides a fix is good | Side effects while fixing |
+|---|---|---|---|---|
+| [Playwright Test Agents, healer](https://playwright.dev/docs/test-agents) | A failing test: locators, waits, data | After a test fails, run by a developer | It re-runs the test until it passes; if it believes the feature itself is broken, it skips the test | Tests, run against an app under test |
+| [Stagehand](https://docs.stagehand.dev/v3/basics/act) | A cached action | When a cached action fails on a changed page | Not described | Not described |
+| [Browser Use, deterministic rerun](https://docs.browser-use.com/cloud/agent/cache-script) | The saved script | When the script fails or its result is malformed | Quick checks without a model for empty results, error fields or exception text | Not described |
+| [CloudCruise, maintenance agent](https://docs.cloudcruise.com/concepts/maintenance-agent) | Popups, selectors, credentials, transient outages in a recorded workflow | When a workflow action fails: recover in place, ask for input, retry later, notify, or hand over | Not described | Not described |
+| [Skyvern](https://www.skyvern.com/blog/layout-resistant-browser-automation-tools/) | Its cached script, by falling back to its vision-based agent | When the script fails | Not described in that post | Not described |
+| [Kadoa](https://www.kadoa.com/blog/autogenerate-self-healing-web-scrapers) | Scraper selectors | When a site changes | Not described | Reading only |
+| **Anvil** | The whole plan, across pages, from the goal | After a failure triaged as structural, or before any failure (monitor alert, check button, a person) but only when a fit check shows the saved steps no longer fit | A contract learned from the first good run, including the site's own record of a booking; three failed tries roll back | Bookings rehearsed up to the button; reading steps tried on an existing booking; the site counted 0 bookings during every repair on the bench and on production |
 
 What Anvil adds, concretely:
 
@@ -174,6 +206,7 @@ On 2026-09-14:
 - **The monitor checks every four hours** to keep credits down; the page's button asks for a check on demand.
 - **A fit check cannot see past the booking button.** It rehearses up to it and reads the last good booking, but what pressing it leads to (a new "check your details" page) only shows on a real booking. That change passes the fit check; the next booking then fails without booking anything, and the repair runs from there.
 - **Failed runs are not fit-checked.** A structural failure goes straight to a repair, so the one-off step timeout below can still cause a repair that was not needed.
+- **The redesign benchmark is six sites.** One of the three that broke (LWN) was not repaired. The contract only checks what the first good read had on every record, so a field that was sometimes missing back then is not required later.
 - **Crawl's `includePatterns` only filter the first few links it discovers,** so Anvil starts crawls at the page it wants instead.
 
 ## Running it yourself

@@ -42,7 +42,7 @@ export async function learnContract(cap, { contract, inputs, snapshot }) {
   return row;
 }
 
-export const amendContractRow = (id, { bounds, formats }) => db.contract.update({ where: { id }, data: { bounds, formats } });
+export const amendContractRow = (id, { bounds, formats, minRecords }) => db.contract.update({ where: { id }, data: { bounds, formats, ...(minRecords !== undefined && { minRecords }) } });
 
 // A plan that books something: repairs must rehearse it and never repeat its commit step.
 export const booksSomething = (cap) => cap.engine === 'browser' && (cap.plan?.steps ?? []).some((s) => s.commit);

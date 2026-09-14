@@ -85,7 +85,9 @@ export async function repairRead(cap, rec, { failure }, log, finish) {
     for (const c of changes) log('diff', c);
 
     const html = compactHtml(page.html);
-    const want = cap.contract.fieldTypes;
+    // every field the old steps read, including ones the contract could not require (not on every record)
+    const planFields = Object.fromEntries(previous.steps.filter((s) => s.kind === 'extract').flatMap((s) => Object.entries(s.fields ?? {}).map(([k, f]) => [k, f.type ?? 'string'])));
+    const want = { ...planFields, ...cap.contract.fieldTypes };
     const rejections = [];
     for (let n = 1; n <= MAX_ATTEMPTS; n++) {
       log('attempt', `attempt ${n} of ${MAX_ATTEMPTS}`, { attempt: n });

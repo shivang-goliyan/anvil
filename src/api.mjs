@@ -18,6 +18,7 @@ const HOST = process.env.HOST ?? '127.0.0.1';
 const TARGET_ADMIN = process.env.TARGET_ADMIN_URL || process.env.TARGET_FORWARD || 'http://localhost:4310';
 const WEB = new URL('../web/', import.meta.url);
 const DEMO = new URL('../demo/recorded.json', import.meta.url);
+const REDESIGNS = new URL('../demo/redesigns.json', import.meta.url);
 // [requests, window] per IP. Breaking the demo site is the one people will want to spam.
 const LIMITS = { read: [300, 60_000], write: [12, 60_000], break: [6, 10 * 60_000], check: [3, 10 * 60_000] };
 // a check costs credits whoever asks, so there is one at a time for everyone
@@ -169,6 +170,14 @@ const routes = [
     },
   ],
   ['GET', /^\/api\/budget$/, async (req, res) => send(res, 200, await budget())],
+  [
+    'GET',
+    /^\/api\/redesigns$/,
+    async (req, res) => {
+      const body = await readFile(REDESIGNS, 'utf8').catch(() => null);
+      return body ? send(res, 200, JSON.parse(body)) : send(res, 404, { error: 'no redesign benchmark saved on this deployment' });
+    },
+  ],
   [
     'GET',
     /^\/api\/(demo\/)?shots\/([^/]+)$/,

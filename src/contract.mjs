@@ -58,7 +58,9 @@ export function deriveContract(records, inputs) {
 export function checkContract(contract, records, inputs) {
   const problems = [];
   const drift = [];
-  if (records.length < contract.minRecords) problems.push(`got ${records.length} record(s), need at least ${contract.minRecords}`);
+  // nothing at all is a broken read; fewer than before, each one complete, is a list the site made shorter
+  if (records.length === 0 && contract.minRecords > 0) problems.push(`got 0 record(s), need at least ${contract.minRecords}`);
+  else if (records.length < contract.minRecords) drift.push({ kind: 'count', value: records.length, text: `got ${records.length} records, fewer than the ${contract.minRecords} expected so far` });
 
   records.forEach((r, i) => {
     const at = records.length > 1 ? ` in record ${i + 1}` : '';
@@ -86,7 +88,7 @@ export function checkContract(contract, records, inputs) {
 
 // Learns from a result that passed every invariant: widens ranges and accepts the new code shapes.
 export function amendContract(contract, records, drift) {
-  const next = { bounds: structuredClone(contract.bounds ?? {}), formats: structuredClone(contract.formats ?? {}) };
+  const next = { bounds: structuredClone(contract.bounds ?? {}), formats: structuredClone(contract.formats ?? {}), minRecords: contract.minRecords };
   const changes = [];
   for (const d of drift) {
     if (d.kind === 'bounds') {
@@ -94,6 +96,9 @@ export function amendContract(contract, records, drift) {
       b.min = Math.min(b.min, d.value);
       b.max = Math.max(b.max, d.value);
       changes.push(`"${d.field}" may now be ${d.value}`);
+    } else if (d.kind === 'count') {
+      next.minRecords = Math.max(1, Math.floor(d.value / 2));
+      changes.push(`${d.value} records is fine now (at least ${next.minRecords})`);
     } else if (d.kind === 'format') {
       const f = next.formats[d.field];
       if (!f.shapes.includes(d.shape)) f.shapes.push(d.shape);

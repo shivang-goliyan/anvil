@@ -1449,6 +1449,39 @@ function renderRealCaps() {
   $('real-caps').hidden = !reads.length;
 }
 
+// the real-redesign benchmark: saved results of scripts/redesigns.mjs, shown as they came out
+async function renderRedesigns() {
+  const { status, json } = await api('GET', '/api/redesigns');
+  if (status !== 200 || !json.results?.length) return;
+  const when = new Date(json.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  const broke = json.results.filter((r) => r.live && r.live.status !== 'succeeded');
+  const fixed = broke.filter((r) => r.after?.status === 'succeeded');
+  $('redesigns-note').textContent = `For each site Anvil learned a reading task on the page as the Wayback Machine kept it years ago, then ran those saved steps on the live site through Anakin's URL Scraper, with the same run, triage and repair code this page uses. Nobody designed these changes. ${broke.length} of ${json.results.length} sites had changed in a way that broke the old steps, and ${fixed.length} of those were repaired and read again. Run ${when}.${json.note ? ` ${json.note}` : ''}`;
+  const short = (s, n = 140) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s ?? '');
+  const changed = (r) => {
+    if (!r.live || r.live.status === 'succeeded') return '—';
+    const gone = r.repair?.changed?.find((c) => /matches nothing|matches 0/.test(c));
+    if (gone) return short(gone);
+    const empty = [...new Set([...(r.live.why ?? '').matchAll(/"(\w+)" is missing/g)].map((m) => m[1]))];
+    return empty.length ? `${empty.map((f) => `"${f}"`).join(' and ')} came back empty on every record the old steps found (${r.live.records})` : short(r.live.why?.replace(/^structural: /, ''));
+  };
+  $('redesigns-rows').replaceChildren(
+    ...json.results.map((r) =>
+      h(
+        'tr',
+        {},
+        h('td', {}, h('a', { href: r.url, target: '_blank', rel: 'noopener', text: r.site })),
+        h('td', { text: r.snapshot }),
+        h('td', {}, r.error ? h('span', { class: 'bad', text: short(r.error, 90) }) : r.live.status === 'succeeded' ? h('span', { class: 'ok', text: `still works, ${r.live.records} records${r.live.amended ? ` (check updated: ${r.live.amended})` : ''}` }) : h('span', { class: 'bad', text: `broke (${r.live.failureKind})` })),
+        h('td', { text: changed(r) }),
+        h('td', {}, r.repair ? h('span', { class: r.repair.outcome === 'repaired' ? 'ok' : 'bad', text: `${r.repair.outcome === 'repaired' ? 'repaired' : 'not fixed, kept the old steps'} after ${r.repair.tries} tr${r.repair.tries === 1 ? 'y' : 'ies'}, ${r.repair.seconds}s${r.repair.outcome !== 'repaired' && r.repair.rejected?.length ? `. Last try: ${short(r.repair.rejected.at(-1).replace(/^the new steps read the page, but the check failed: /, 'the check failed, '), 90)}` : ''}` }) : '—'),
+        h('td', {}, r.after ? h('span', { class: r.after.status === 'succeeded' ? 'ok' : 'bad', text: `${r.after.status === 'succeeded' ? 'read' : r.after.status}, ${r.after.records} records` }) : '—'),
+      ),
+    ),
+  );
+  $('redesigns').hidden = false;
+}
+
 const EXAMPLES = [
   { text: 'Top stories on Hacker News', url: 'https://news.ycombinator.com/', goal: 'the top stories with their title, link and points' },
   { text: 'Upcoming Python events', url: 'https://www.python.org/', goal: 'upcoming Python community events with their dates and locations' },
@@ -1523,6 +1556,7 @@ function toast(title, tone, target, text) {
 }
 
 renderStory();
+renderRedesigns();
 await refreshCapabilities();
 renderComposer(current());
 renderPlans(current());

@@ -1,0 +1,439 @@
+{
+ "at": "2026-09-14T02:42:15.885Z",
+ "note": "python.org was run again on its own a few minutes later: in the full run its robots.txt fetch failed on our side and Anvil stopped before reading it (robots.txt it cannot read counts as a no). That retry now happens after a minute instead of an hour.",
+ "results": [
+  {
+   "site": "Hacker News",
+   "url": "https://news.ycombinator.com/",
+   "snapshot": "2019-01-01",
+   "goal": "the front page stories with their title, link and points",
+   "credits": 4,
+   "seconds": 20,
+   "learned": {
+    "tries": 1,
+    "model": "openai/gpt-oss-120b",
+    "records": 30,
+    "sample": {
+     "title": "Netflix stops paying the ‘Apple tax’ on its $853M in annual iOS revenue",
+     "link": "https://techcrunch.com/2018/12/31/netflix-stops-paying-the-apple-tax-on-its-853m-in-annual-ios-revenue/",
+     "points": 171
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://news.ycombinator.com/"
+     },
+     {
+      "kind": "assert",
+      "selector": "tr.athing"
+     },
+     {
+      "kind": "extract",
+      "each": "tr.athing",
+      "fields": {
+       "title": {
+        "selector": "a.storylink",
+        "type": "string"
+       },
+       "link": {
+        "selector": "a.storylink",
+        "type": "string",
+        "attr": "href"
+       },
+       "points": {
+        "selector": "+ tr .score",
+        "type": "number"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "failed",
+    "failureKind": "structural",
+    "records": 30,
+    "why": "structural: \"title\" is missing in record 1; \"link\" is missing in record 1; \"title\" is missing in record 2; \"link\" is missing in record 2; \"title\" is missing in record 3; \"link\" is missing in record 3; \"title\" is missing in record 4; \"link\" is missing in record 4; \"title\" is missing in record 5; \"lin…"
+   },
+   "repair": {
+    "outcome": "repaired",
+    "tries": 1,
+    "seconds": 6,
+    "changed": [
+     "\"tr.athing\", one element per record, matches 30 elements on the live page"
+    ],
+    "rejected": [],
+    "models": [
+     "openai/gpt-oss-120b"
+    ]
+   },
+   "after": {
+    "status": "succeeded",
+    "records": 30,
+    "sample": {
+     "title": "Fable 5.1 Solves the Cyphral Distich, a 370-year-old cipher",
+     "link": "https://www.vals.ai/blogs/fable-solves-cyphral-distich",
+     "points": 513
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://news.ycombinator.com/"
+     },
+     {
+      "kind": "assert",
+      "selector": "tr.athing"
+     },
+     {
+      "kind": "extract",
+      "each": "tr.athing",
+      "fields": {
+       "title": {
+        "selector": "td.title span.titleline a",
+        "type": "string"
+       },
+       "link": {
+        "selector": "td.title span.titleline a",
+        "type": "string",
+        "attr": "href"
+       },
+       "points": {
+        "selector": "+ tr .score",
+        "type": "number"
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "site": "GitHub Trending",
+   "url": "https://github.com/trending",
+   "snapshot": "2019-01-01",
+   "goal": "the trending repositories with their name, description and total stars",
+   "credits": 4,
+   "seconds": 39,
+   "learned": {
+    "tries": 1,
+    "model": "gemini-3.6-flash",
+    "records": 25,
+    "sample": {
+     "name": "MaximAbramchuck / awesome-interview-questions",
+     "description": "A curated awesome list of lists of interview questions. Feel free to contribute! 🎓",
+     "total_stars": 22668
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://github.com/trending"
+     },
+     {
+      "kind": "assert",
+      "selector": "ol.repo-list"
+     },
+     {
+      "kind": "extract",
+      "each": "ol.repo-list > li",
+      "fields": {
+       "name": {
+        "selector": "h3 a",
+        "type": "string"
+       },
+       "description": {
+        "selector": "p",
+        "type": "string"
+       },
+       "total_stars": {
+        "selector": "a[href*='/stargazers']",
+        "type": "number"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "failed",
+    "failureKind": "structural",
+    "records": 0,
+    "why": "structural: page rendered fine but step 2 (assert ol.repo-list) failed: no element matches ol.repo-list"
+   },
+   "repair": {
+    "outcome": "repaired",
+    "tries": 1,
+    "seconds": 16,
+    "changed": [
+     "headings changed from [\"Trending\"] to [\"Navigation Menu\",\"Trending\",\"JustVugg / colibri\",\"ever-co / ever-gauzy\",\"bilawalsidhu / gods-eye-view\",\"tech-leads-club / agent-skills\",\"melgarafael / DeskcommCRM\",\"calesthio / OpenMontage\",\"asgeirtj / system_prompts_leaks\",\"vxcontrol / pentagi\",\"multimodal-art-projection / YuE\",\"yuliskov / SmartTube\",\"alphaXiv / OpenResearch\",\"debpalash / VoiceStudio\",\"SnailSploit / Claude-Red\",\"alibaba / open-code-review\",\"jihe520 / MathModelAgent\",\"tonhowtf / omniget\",\"jiji262 / douyin-downloader\",\"Swordfish90 / cool-retro-term\",\"huggingface / transformers\",\"Footer\"]",
+     "form count went from 1 to 0",
+     "the saved check \"ol.repo-list\" matches nothing on the live page",
+     "\"ol.repo-list > li\", one element per record, matches 0 elements on the live page"
+    ],
+    "rejected": [],
+    "models": [
+     "gemini-3.6-flash"
+    ]
+   },
+   "after": {
+    "status": "succeeded",
+    "records": 19,
+    "sample": {
+     "name": "JustVugg / colibri",
+     "description": "Run frontier MoE models on hardware you already own — pure C, zero deps, experts streamed from disk. Tiny engine, immense model. 🐦",
+     "total_stars": 30007
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://github.com/trending"
+     },
+     {
+      "kind": "assert",
+      "selector": "article.Box-row"
+     },
+     {
+      "kind": "extract",
+      "each": "article.Box-row",
+      "fields": {
+       "name": {
+        "selector": "h2 a",
+        "type": "string"
+       },
+       "description": {
+        "selector": "p",
+        "type": "string"
+       },
+       "total_stars": {
+        "selector": "a[href*=\"/stargazers\"]",
+        "type": "number"
+       }
+      }
+     }
+    ]
+   }
+  },
+  {
+   "site": "Python events",
+   "url": "https://www.python.org/events/python-events/",
+   "snapshot": "2018-01-29",
+   "goal": "upcoming Python events with their name, date and location",
+   "credits": 2,
+   "seconds": 21,
+   "learned": {
+    "tries": 1,
+    "model": "gemini-3.6-flash",
+    "records": 22,
+    "sample": {
+     "name": "Django Girls Legon",
+     "date": "02 Feb. – 04 Feb. 2018",
+     "location": "University of Ghana Campus, Legon Boundary, Accra, Ghana"
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://www.python.org/events/python-events/"
+     },
+     {
+      "kind": "assert",
+      "selector": "ul.list-recent-events li"
+     },
+     {
+      "kind": "extract",
+      "each": "ul.list-recent-events li",
+      "fields": {
+       "name": {
+        "selector": ".event-title a",
+        "type": "string"
+       },
+       "date": {
+        "selector": "time",
+        "type": "string"
+       },
+       "location": {
+        "selector": ".event-location",
+        "type": "string"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "succeeded",
+    "failureKind": null,
+    "records": 6,
+    "why": null,
+    "amended": "6 records is fine now (at least 3)"
+   }
+  },
+  {
+   "site": "Rust blog",
+   "url": "https://blog.rust-lang.org/",
+   "snapshot": "2019-01-17",
+   "goal": "the blog posts with their title, date and link",
+   "credits": 2,
+   "seconds": 22,
+   "learned": {
+    "tries": 1,
+    "model": "gemini-3.6-flash",
+    "records": 50,
+    "sample": {
+     "title": "Procedural Macros in Rust 2018",
+     "date": "Dec. 21",
+     "link": "https://blog.rust-lang.org/2018/12/21/Procedural-Macros-in-Rust-2018.html"
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://blog.rust-lang.org/"
+     },
+     {
+      "kind": "assert",
+      "selector": "table.post-list tr"
+     },
+     {
+      "kind": "extract",
+      "each": "table.post-list tr",
+      "fields": {
+       "title": {
+        "selector": "td a"
+       },
+       "date": {
+        "selector": "td:first-child"
+       },
+       "link": {
+        "selector": "td a",
+        "attr": "href"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "succeeded",
+    "failureKind": null,
+    "records": 50,
+    "why": null
+   }
+  },
+  {
+   "site": "kernel.org",
+   "url": "https://www.kernel.org/",
+   "snapshot": "2018-01-01",
+   "goal": "the kernel releases with their release type, version and release date",
+   "credits": 2,
+   "seconds": 14,
+   "learned": {
+    "tries": 1,
+    "model": "gemini-3.6-flash",
+    "records": 9,
+    "sample": {
+     "release_type": "mainline:",
+     "version": "4.15-rc6",
+     "release_date": "2017-12-31"
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://www.kernel.org/"
+     },
+     {
+      "kind": "assert",
+      "selector": "#releases tr"
+     },
+     {
+      "kind": "extract",
+      "each": "#releases tr",
+      "fields": {
+       "release_type": {
+        "selector": "td:nth-child(1)",
+        "type": "string"
+       },
+       "version": {
+        "selector": "td:nth-child(2)",
+        "type": "string"
+       },
+       "release_date": {
+        "selector": "td:nth-child(3)",
+        "type": "string"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "succeeded",
+    "failureKind": null,
+    "records": 10,
+    "why": null
+   }
+  },
+  {
+   "site": "LWN",
+   "url": "https://lwn.net/",
+   "snapshot": "2018-01-01",
+   "goal": "the front page articles with their title and link",
+   "credits": 3,
+   "seconds": 232,
+   "learned": {
+    "tries": 1,
+    "model": "gemini-3.6-flash",
+    "records": 20,
+    "sample": {
+     "title": "[$] An introduction to the BPF Compiler Collection",
+     "link": "https://lwn.net/Articles/742082/"
+    },
+    "steps": [
+     {
+      "kind": "navigate",
+      "url": "https://lwn.net/"
+     },
+     {
+      "kind": "assert",
+      "selector": ".Headline"
+     },
+     {
+      "kind": "extract",
+      "each": ".fp-feature, .pure-u-md-11-24",
+      "fields": {
+       "title": {
+        "selector": ".Headline",
+        "type": "string"
+       },
+       "link": {
+        "selector": "a[href^=\"/Articles/\"]",
+        "attr": "href",
+        "type": "string"
+       }
+      }
+     }
+    ]
+   },
+   "live": {
+    "status": "failed",
+    "failureKind": "structural",
+    "records": 0,
+    "why": "structural: got 0 record(s), need at least 10"
+   },
+   "repair": {
+    "outcome": "degraded",
+    "tries": 3,
+    "seconds": 205,
+    "changed": [
+     "headings changed from [\"Welcome to LWN.net\"] to [\"Welcome to LWN.net\",\"[$] Accelerating the kernel's build process\",\"[$] PostgreSQL 19's \\\"scary patch contest\\\"\",\"[$] LWN.net Weekly Edition for September 10, 2026\",\"[$] Typst makes big strides\",\"[$] Stabilizing Rust's never type\",\"[$] CERN's migration path from CentOS Linux to Debian\",\"[$] Fixing the TCMalloc regression with RSEQ operations\",\"[$] Deterministic testing for multithreaded Python\",\"[$] Recent work in memory tiering\",\"LWN.net Weekly Edition for September 3, 2026\",\"Reminder: subscription price change coming\",\"Kernel prepatch 7.3-rc3\",\"EuroPython 2026 videos published\",\"Two stable kernel updates for Friday\",\"Security updates for Friday\",\"Forgejo 16.0.4 and 15.0.8 address critical security vulnerability\",\"Julia 1.13 released\",\"Security updates for Thursday\",\"A decade of Rustls\",\"LibreOffice Base survey results\"]",
+     "form 1: action changed from \"https://lwn.net/login\" to \"https://lwn.net/Login/\"",
+     "form 1: field \"Username\" (label \"null\") is gone; a text field \"uname\" (label \"User:\") sits in the same position, likely a rename",
+     "form 1: field \"Password\" (label \"null\") is gone; a password field \"pword\" (label \"Password:\") sits in the same position, likely a rename",
+     "form 3: action changed from \"https://lwn.net/newaccount\" to \"https://lwn.net/Login/newaccount\"",
+     "\".fp-feature, .pure-u-md-11-24\", one element per record, matches 0 elements on the live page"
+    ],
+    "rejected": [
+     "The plan did not work on the page: field \"link\" came back empty in 20 of 20 records (selector \"a\")",
+     "the new steps read the page, but the check failed: \"link\" is missing in record 3; \"link\" is missing in record 4; \"link\" is missing in record 10",
+     "the new steps read the page, but the check failed: \"link\" is missing in record 3; \"link\" is missing in record 4; \"link\" is missing in record 10"
+    ],
+    "models": [
+     "gemini-3.6-flash",
+     "gemini-3.6-flash",
+     "gemini-3.6-flash"
+    ]
+   }
+  }
+ ]
+}

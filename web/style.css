@@ -512,6 +512,15 @@ h1 em::after {
 .real-head { max-width: 760px; }
 .real h2 { margin: 0 0 12px; font: 800 clamp(30px, 4vw, 48px)/1.05 var(--display); letter-spacing: -0.045em; }
 .real-head > p:last-child { margin: 0; font-size: 16.5px; color: var(--muted); line-height: 1.55; }
+.redesigns { margin-top: 30px; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; }
+.redesigns h3 { margin: 4px 0 6px; font: 800 20px/1.2 var(--display); letter-spacing: -0.02em; }
+.redesigns .table-wrap { overflow-x: auto; margin-top: 14px; }
+.redesigns table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+.redesigns th { text-align: left; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--faint); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.redesigns td { padding: 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.redesigns td code { font: 500 12px var(--mono); overflow-wrap: anywhere; }
+.redesigns .ok { color: var(--good); font-weight: 600; }
+.redesigns .bad { color: var(--bad); font-weight: 600; }
 .real-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 26px; }
 .real-grid article { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 18px 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 6px; }
 .real-grid .host { margin: 0; font: 600 12px var(--mono); color: var(--blue); }
