@@ -7,7 +7,8 @@ import { harborEvents } from '../capabilities/harbor-events.mjs';
 
 const reset = process.argv.includes('--reset');
 for (const def of [reserveRoom(), harborEvents()]) {
-  const { created } = await seedCapability(def, { reset });
-  console.log(`${def.id}: ${created ? (reset ? 'reset to hand-written plan v1' : 'created') : 'already there, left alone (use --reset)'}  target ${def.targetUrl}`);
+  const { created, learned, learning } = await seedCapability(def, { reset });
+  const how = learned ? 'the plan learned from its sentence' : learning ? 'a learning job (no saved learned plan yet)' : 'its first plan';
+  console.log(`${def.id}: ${created ? `${reset ? 'reset' : 'created'} with ${how}` : 'already there, left alone (use --reset)'}  target ${def.targetUrl}`);
 }
 await db.$disconnect();

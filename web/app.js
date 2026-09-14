@@ -913,7 +913,125 @@ function derivationView(card) {
   };
 }
 
-const VIEWS = { run: runView, repair: repairView, derivation: derivationView };
+// ------------------------------------------------------------------ learning a booking from its sentence
+
+function learnView(card) {
+  card.heading.textContent = 'Anvil learns the booking from one sentence';
+  const view = { stepper: h('ol', { class: 'stepper' }), live: null };
+  card.body.append(view.stepper);
+  let running = null;
+  let shots = null;
+  let steps = [];
+  let presses = 0;
+  let skipped = 0;
+  const add = (opts) => {
+    endLive(view);
+    return stepItem(view.stepper, opts);
+  };
+  const outcome = (tone, big, text) => {
+    endLive(view);
+    card.body.querySelector('.outcome')?.remove();
+    view.stepper.after(h('div', { class: `outcome ${tone}` }, h('span', { class: 'big', text: big }), h('p', { text })));
+  };
+  return {
+    event(e) {
+      const d = e.detail ?? {};
+      if (e.kind === 'queued') {
+        card.sub.textContent = 'no steps to start from, only a sentence';
+      } else if (e.kind === 'learn') {
+        setChip(card, 'learning', 'run', true);
+        add({ icon: '“', title: 'The sentence it starts from', text: d.goal, extra: d.inputs ? h('ul', { class: 'checks' }, Object.entries(d.inputs).map(([k, v]) => h('li', {}, h('b', { text: k }), String(v)))) : null });
+      } else if (e.kind === 'conduct') {
+        add({ icon: '§', tone: 'bad', title: 'Not allowed to learn a booking there', text: cap1(e.label) });
+      } else if (e.kind === 'attempt') {
+        endLive(view);
+        view.stepper.append(h('li', { class: 'attempt' }, h('span', { text: e.label.replace(/^attempt/, 'try') })));
+      } else if (e.kind === 'read' && d.explore) {
+        add({ icon: '↗', title: `Also opened ${new URL(d.url).pathname}`, text: 'A plain link on the page that sounds like part of the job. Opening it books nothing.' });
+      } else if (e.kind === 'read') {
+        add({ icon: '↓', title: 'Opened the booking page in a cloud browser', text: cap1(e.label.replace(/^opened \S+: /, 'it has ')) });
+        liveRow(view, 'An AI model is writing the steps from the page', MODEL_HINT);
+      } else if (e.kind === 'derive' && /^skipped/.test(e.label)) {
+        skipped++;
+      } else if (e.kind === 'derive') {
+        add({ icon: '✎', title: `Steps written in ${(d.ms / 1000).toFixed(1)}s`, text: `by ${d.model}${skipped ? `, after skipping ${skipped} model${skipped === 1 ? '' : 's'} that ${skipped === 1 ? 'was' : 'were'} busy or out of free requests` : ''}` });
+        skipped = 0;
+      } else if (e.kind === 'reject') {
+        add({ icon: '✕', tone: 'bad', title: 'Those steps could not run, asking again', text: e.label.replace(/^The steps were not runnable: /, '') });
+      } else if (e.kind === 'plan') {
+        steps = d.steps ?? [];
+        add({ icon: '≡', tone: 'good', title: `The ${steps.length} steps it wrote`, extra: plainDiff([], steps) });
+        shots = viewer();
+        presses = 0;
+        running = add({ icon: '▶', title: 'Tried them on the real website', text: 'filling everything in, and stopping before the button that books', extra: shots.node });
+        liveRow(view, 'Running the steps', 'cloud browser');
+      } else if (e.kind === 'step' && running) {
+        running.querySelector('p').textContent = short(plainStep(d.step), 110);
+      } else if (e.kind === 'shot' && shots) {
+        const [text, tone] = shotCaption(d, presses, plainStep(steps[d.index]));
+        if (!d.stuck && !d.after && d.kind !== 'extract') presses++;
+        shots.add(d.src, text, tone);
+      } else if (e.kind === 'rehearse') {
+        const miss = d.sent?.missing ?? [];
+        add({
+          icon: miss.length ? '✕' : '◌',
+          tone: miss.length ? 'bad' : 'good',
+          title: miss.length ? 'The rehearsal came up short' : 'Rehearsed the booking without booking',
+          text: miss.length ? `Right before the booking button, the page did not hold ${listWords(miss.map(fieldWords))}.` : 'Right before the button that books, it read the page back: every detail was there. Nothing was sent.',
+        });
+      } else if (e.kind === 'commit') {
+        add({ icon: '→', title: 'Now the one real booking', text: 'The rehearsal passed, so it presses the booking button once, with the sample details, and reads the booking back.' });
+        liveRow(view, 'Booking, then reading it back', 'cloud browser');
+      } else if (e.kind === 'execute') {
+        add({ icon: '✕', tone: 'bad', title: d.committed ? 'Booked, but the steps after it got stuck' : 'That did not work', text: `${cap1(humanize(e.label)).replace(/\.$/, '')}. The next try sees the page it stopped on${d.committed || d.existing ? ', and reads that booking back instead of booking again' : ''}.` });
+      } else if (e.kind === 'validate') {
+        const bad = d.problems?.length;
+        const rec = d.records?.[0] ?? {};
+        add({
+          icon: bad ? '✕' : '✓',
+          tone: bad ? 'bad' : 'good',
+          title: bad ? 'The booking it read back did not pass' : d.existing ? 'Read back the booking an earlier try made, and it passed' : 'Read the booking back, and it passed',
+          extra: bad ? h('ul', { class: 'checks' }, d.problems.slice(0, 8).map((p) => h('li', { class: 'miss', text: p }))) : h('ul', { class: 'checks' }, Object.entries(rec).filter(([k]) => !stored(k)).map(([k, v]) => h('li', {}, h('b', { text: k }), `${v}${rec[`stored_${k}`] !== undefined ? ' · on record ✓' : ' ✓'}`))),
+        });
+      } else if (e.kind === 'ledger') {
+        add({ icon: '#', tone: d.during === 1 ? 'good' : 'bad', title: `Bookings made while learning: ${d.during}`, text: "Counted on the library's side. Learning a booking takes one real booking, and later tries read that one back." });
+      } else if (e.kind === 'contract') {
+        add({ icon: '✓', tone: 'good', title: 'Learned what a correct booking looks like', text: 'From that one booking: a reference comes back, the details typed in are shown back, and the library record agrees with the confirmation.' });
+      } else if (e.kind === 'done') {
+        if (d.failed) outcome('bad', 'Not learned', 'Three tries did not produce steps whose booking passes the check, so nothing was saved. It says so instead of pretending.');
+        else outcome('', 'Learned', `Saved as steps version ${d.version}, written from one sentence by ${d.model} in ${d.attempts} tr${d.attempts === 1 ? 'y' : 'ies'}. Bookings use them from now on, and they repair themselves like any other steps.`);
+      } else if (e.kind === 'budget' || e.kind === 'error') {
+        add({ icon: '!', tone: 'bad', title: e.kind === 'budget' ? 'Stopped: budget' : 'Error', text: e.label });
+      }
+    },
+    finish(json, { replay }) {
+      endLive(view);
+      stopClock(card);
+      const o = json.derivation.outcome;
+      setChip(card, o === 'derived' ? 'learned' : o === 'capped' ? 'stopped · budget' : 'not learned', o === 'derived' ? 'good' : o === 'capped' ? 'warm' : 'bad');
+      if (!replay && o === 'derived') card.next.append(h('button', { type: 'button', class: 'btn blue', text: 'Book with the learned steps →', onclick: () => $('run-button').click() }));
+    },
+  };
+}
+
+$('learn-button').addEventListener('click', async () => {
+  $('learn-button').disabled = true;
+  const { status, json } = await api('POST', '/api/learn', {});
+  if (status === 202) {
+    marker('You asked Anvil to learn the booking again from its sentence', 'It starts from nothing but the sentence, the booking page and the details to type in. Learning makes one real booking.', true);
+    follow('derivation', json.derivationId);
+  } else if (status === 409 && (json.derivationId || json.runId || json.repairId)) {
+    notice('run-notice', 'Anvil is busy on the website right now, so you are watching that.');
+    if (json.derivationId) follow('derivation', json.derivationId, { others: true });
+    else if (json.runId) follow('run', json.runId, { others: true });
+    else follow('repair', json.repairId, { others: true });
+  } else {
+    notice('run-notice', json.error ?? `that did not work (${status})`, true);
+  }
+  setTimeout(() => ($('learn-button').disabled = false), 4000);
+});
+
+const VIEWS = { run: runView, repair: repairView, derivation: (card, capability) => (capability?.engine === 'browser' ? learnView(card) : derivationView(card)) };
 const TITLES = { run: 'Anvil books a room', repair: 'Anvil fixes itself', derivation: 'Anvil learns a new website' };
 
 // ------------------------------------------------------------------ following jobs
@@ -1081,7 +1199,11 @@ async function renderPlans(cap) {
       .replace(/^repair \((.*)\)$/, 'fixed itself, written by $1')
       .replace(/^derived \((.*)\)$/, 'learned, written by $1')
       .replace(/^wire \((.*)\)$/, 'Wire action $1')
+      .replace(/^learned from a sentence on ([\d-]+) \((.*)\)$/, 'learned from one sentence on $1, written by $2')
+      .replace(/^hand-written test fixture$/, 'written by hand (a test fixture)')
       .replace(/^hand-written$/, 'written by hand, the starting point');
+  $('learn-again').hidden = cap.engine !== 'browser';
+  if (cap.engine === 'browser') $('learn-note').textContent = `Its first steps come from one sentence: “${json.goal}”`;
   $('plans').replaceChildren(
     ...(plans.length
       ? plans.slice(0, 6).map((p) => h('li', { class: p.active ? 'active' : '' }, h('span', { class: 'v', text: `v${p.version}` }), h('span', { class: 'o', text: nice(p.origin), title: p.origin }), h('time', { text: new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })))
@@ -1333,6 +1455,7 @@ async function loadTarget({ mine = false } = {}) {
     // somebody may be mid-booking or mid-repair as this page opens
     if (json.busy?.runId) follow('run', json.busy.runId, { others: true, scroll: false });
     if (json.busy?.repairId) follow('repair', json.busy.repairId, { others: true, scroll: false });
+    if (json.busy?.derivationId) follow('derivation', json.busy.derivationId, { others: true, scroll: false });
   } else if (!mine && !changing && knownBreaks !== null && json.breaks.length !== knownBreaks) {
     if (json.breaks.length > knownBreaks) {
       const kind = json.breaks.at(-1).kind;
@@ -1568,7 +1691,7 @@ let toastTimer;
 function toast(title, tone, target, text) {
   const node = $('toast');
   node.className = `toast ${tone}`;
-  node.replaceChildren(h('b', { text: title }), text ? h('span', { text }) : null, target ? h('i', { text: 'show me ↓' }) : null);
+  node.replaceChildren(...[h('b', { text: title }), text ? h('span', { text }) : null, target ? h('i', { text: 'show me ↓' }) : null].filter(Boolean));
   node.hidden = false;
   node.onclick = () => {
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });

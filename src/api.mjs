@@ -5,8 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { db } from './db.mjs';
 import { cleanInputs, queueRun, queueRepair, Busy } from './jobs.mjs';
-import { createReadCapability, seedCapability, removeCapability } from './capabilities.mjs';
-import { onAllowlist, allowedSites } from './conduct.mjs';
+import { createReadCapability, seedCapability, removeCapability, queueLearn } from './capabilities.mjs';
+import { onAllowlist, allowedSites, firstParty } from './conduct.mjs';
 import { creditsUsed, hourlyCap } from './budget.mjs';
 import { reserveRoom } from '../capabilities/reserve-room.mjs';
 import { harborEvents } from '../capabilities/harbor-events.mjs';
@@ -142,7 +142,8 @@ async function busyTierB(sandbox = SHARED) {
   const id = reserveRoom(sandbox).id;
   const run = await db.run.findFirst({ where: { capabilityId: id, status: { in: ['queued', 'running'] } }, select: { id: true } });
   const repair = await db.repairAttempt.findFirst({ where: { capabilityId: id, outcome: { in: ['queued', 'running'] } }, select: { id: true } });
-  return run ? { runId: run.id } : repair ? { repairId: repair.id } : null;
+  const learning = await db.derivation.findFirst({ where: { capabilityId: id, outcome: { in: ['queued', 'running'] } }, select: { id: true } });
+  return run ? { runId: run.id } : repair ? { repairId: repair.id } : learning ? { derivationId: learning.id } : null;
 }
 
 // Anakin signs alerts as sha256=<hex HMAC of the raw body> with the monitor's secret.
@@ -396,6 +397,22 @@ const routes = [
     },
   ],
   [
+    // Learn the booking again from its one sentence, on the site as it is right now. Makes one real booking.
+    'POST',
+    /^\/api\/learn$/,
+    async (req, res, m, url, ip, sb) => {
+      if (tooMany(ip, 'break')) return send(res, 429, { error: 'that has been asked for a lot in the last ten minutes, give it a rest for a bit' }, { 'retry-after': '600' });
+      const def = reserveRoom(sb.id);
+      if (!firstParty(new URL(def.targetUrl).hostname)) return send(res, 403, { error: 'Anvil only learns bookings on sites this project owns' });
+      const busy = await busyTierB(sb.id);
+      if (busy) return send(res, 409, { error: 'Anvil is busy on the website right now, try again when that finishes', ...busy });
+      const b = await budget();
+      if (b.used + 6 > b.cap) return cappedReply(res, b);
+      const d = await queueLearn(def.id, def.learn());
+      return send(res, 202, { derivationId: d.id, poll: `/api/derivations/${d.id}` });
+    },
+  ],
+  [
     'GET',
     /^\/api\/activity$/,
     async (req, res, m, url, ip, sb) => {
@@ -421,9 +438,9 @@ const routes = [
       if (busy) return send(res, 409, { error: 'a run or repair is in flight on the demo site, wait for it to finish', ...busy });
       if (action === 'reset') {
         const c = await targetAdmin('/_admin/reset', {}, sb.id);
-        await seedCapability(reserveRoom(sb.id), { reset: true });
+        const seeded = await seedCapability(reserveRoom(sb.id), { reset: true });
         await seedCapability(harborEvents(sb.id), { reset: true });
-        return send(res, 200, { detail: 'the site and the capability are back to how they started', ...c.described });
+        return send(res, 200, { detail: seeded.learning ? 'the site is back to how it started, and Anvil is learning the booking from its sentence again' : 'the site and the capability are back to how they started', learning: !!seeded.learning, ...c.described });
       }
       const own = body.kind === 'custom' ? { field: body.field, label: body.label, button: body.button, order: body.order } : {};
       for (const [k, v] of Object.entries(own)) if (v !== undefined && typeof v !== 'string') return send(res, 400, { error: `"${k}" should be text` });

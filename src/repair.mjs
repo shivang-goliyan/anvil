@@ -117,6 +117,7 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   if (write) {
     const run = await db.run.findFirst({ where: { capabilityId: cap.id, status: 'succeeded' }, orderBy: { createdAt: 'desc' }, select: { inputs: true, result: true } });
     if (run?.result?.afterCommitUrl) lastGood = { url: run.result.afterCommitUrl, inputs: run.inputs, why: 'the last good booking' };
+    else if (cap.contract.goldenSample?.afterCommitUrl) lastGood = { url: cap.contract.goldenSample.afterCommitUrl, inputs: cap.contract.goldenSample.inputs, why: 'the booking made while learning' };
   }
   let readExisting = null;
   let bookedBefore = false;
@@ -127,7 +128,9 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   let peeked = !(write && lastGood);
   const remember = async (session) => {
     const html = await session.within(5000, contentWithFrames(session.page), 'reading the page').catch(() => '');
-    if (html) pages.set(session.page.url(), compactHtml(html, 8000));
+    // one address can show different pages (a lookup form, then the record it found), so the title is part of the key
+    const title = await session.page.title().catch(() => '');
+    if (html) pages.set(title ? `${session.page.url()}, titled "${title}"` : session.page.url(), compactHtml(html, 8000));
     return html;
   };
   for (let n = 1; n <= MAX_ATTEMPTS && !ending; n++) {

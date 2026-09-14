@@ -38,3 +38,8 @@ test('selector placeholders are checked', () => {
   assert.equal(problems.length, 1);
   assert.match(problems[0], /unknown input "nope"/);
 });
+
+test('pressing a form is refused', () => {
+  const plan = { steps: [{ kind: 'navigate', url: '/' }, { kind: 'submit', selector: 'form#reserve-form', commit: true }, { kind: 'extract', fields: { a: { selector: '#a' } } }] };
+  assert.ok(checkPlanShape(plan, { outputFields: ['a'], write: true }).some((p) => /presses the form itself/.test(p)));
+});

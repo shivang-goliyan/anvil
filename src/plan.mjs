@@ -21,6 +21,8 @@ export function checkPlanShape(plan, { outputFields = [], inputKeys = [], write 
     if (!KINDS.has(s?.kind)) problems.push(`step ${i + 1} has unknown kind "${s?.kind}"`);
     if (s?.kind === 'navigate' && typeof s.url !== 'string') problems.push(`step ${i + 1} navigate needs a url`);
     if (['fill', 'select', 'check', 'click', 'submit', 'assert'].includes(s?.kind) && !s.selector) problems.push(`step ${i + 1} ${s.kind} needs a selector`);
+    // pressing a <form> itself does nothing; it is the button inside that sends it
+    if (['click', 'submit'].includes(s?.kind) && /(^|[\s>])form([#.[][^\s>]*)?\s*$/.test(String(s.selector ?? ''))) problems.push(`step ${i + 1} presses the form itself (${s.selector}); press its submit button instead`);
     if (s?.frame !== undefined && typeof s.frame !== 'string') problems.push(`step ${i + 1} frame must be a css selector`);
     // values, and selectors such as a radio button's input[value="{{room}}"], may use inputs
     for (const text of [s?.kind === 'fill' || s?.kind === 'select' ? s.value : '', s?.selector])
@@ -52,6 +54,37 @@ async function makeSureItLoaded(page, session) {
   if (!page.url().startsWith('chrome-error://')) return;
   if (session.recover && (await session.recover())) return;
   throw Object.assign(new Error('the page did not load at all (the browser showed its own error page)'), { navigation: true });
+}
+
+// Waits for what a press should bring up. A waitFor is for pages that update in place; when the press loaded a
+// whole new page instead, that page is what the next steps check, so a guessed waitFor does not fail it. A redirect
+// the browser could not follow shows its own error page, which is loaded again (a plain GET) instead of waited out.
+async function appears(page, session, locator, loaded, timeout = 20_000) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    if (page.url().startsWith('chrome-error://')) await makeSureItLoaded(page, session);
+    if (await locator.isVisible().catch(() => false)) return;
+    if (loaded.done && !page.url().startsWith('chrome-error://')) return;
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  await locator.waitFor({ state: 'visible', timeout: 1000 });
+}
+
+// true once the main frame has loaded a new document; history changes in a JavaScript app do not count
+function newDocument(page) {
+  const seen = { done: false };
+  page.waitForEvent('load', { timeout: 20_000 }).then(
+    () => (seen.done = true),
+    () => {},
+  );
+  return seen;
+}
+
+// A value a later step types in has to have been read first. Typing an empty one into a required box only shows
+// up much later as a form that will not send, so it is caught here, where the cause is.
+function readValue(template, out, index) {
+  for (const ref of String(template ?? '').matchAll(/\{\{\s*out\.(\w+)\s*\}\}/g))
+    if (out[ref[1]] === null || out[ref[1]] === undefined || out[ref[1]] === '') throw new Error(`step ${index + 1} types {{out.${ref[1]}}}, but the step that reads "${ref[1]}" found nothing on its page`);
 }
 
 const fillIn = (value, inputs, out = {}) =>
@@ -173,6 +206,7 @@ export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {
         if (entryHtml === null) entryHtml = await page.content();
         await afterStep(index, step);
       } else if (step.kind === 'fill') {
+        readValue(step.value, out, index);
         await at(step.selector).fill(fillIn(step.value, inputs, out), { timeout: STEP_TIMEOUT });
         await afterStep(index, step);
       } else if (step.kind === 'select') {
@@ -184,13 +218,15 @@ export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {
       } else if (step.kind === 'check') {
         await at(step.selector).check({ timeout: STEP_TIMEOUT });
       } else if (step.kind === 'click') {
+        const loaded = newDocument(page);
         await at(step.selector).click({ timeout: STEP_TIMEOUT });
-        if (step.waitFor) await at(step.waitFor).waitFor({ state: 'visible', timeout: 20_000 });
+        if (step.waitFor) await appears(page, session, at(step.waitFor), loaded);
       } else if (step.kind === 'submit') {
         if (step.waitFor) {
           // pages built in JavaScript often update in place instead of loading a new page
+          const loaded = newDocument(page);
           await at(step.selector).click({ timeout: STEP_TIMEOUT });
-          await at(step.waitFor).waitFor({ state: 'visible', timeout: 20_000 });
+          await appears(page, session, at(step.waitFor), loaded);
         } else {
           const loaded = page.waitForEvent('framenavigated', { timeout: 20_000 });
           loaded.catch(() => {});

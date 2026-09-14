@@ -5,6 +5,7 @@ import { tracer } from './trace.mjs';
 import { executeRun } from './run.mjs';
 import { executeRepair } from './repair.mjs';
 import { executeDerive } from './derive-read.mjs';
+import { executeLearn } from './learn.mjs';
 import { hourlyCap, creditsUsed } from './budget.mjs';
 import { pickJob, yieldsTo } from './job-order.mjs';
 
@@ -14,7 +15,7 @@ const POLL_MS = Number(process.env.WORKER_POLL_MS ?? 1000);
 const BEAT_MS = 10_000;
 const LEASE_MS = 45_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const owner = (job) => ({ run: { runId: job.refId }, repair: { repairId: job.refId }, derive: { derivationId: job.refId } })[job.kind];
+const owner = (job) => ({ run: { runId: job.refId }, repair: { repairId: job.refId }, derive: { derivationId: job.refId }, learn: { derivationId: job.refId } })[job.kind];
 
 let stopping = false;
 
@@ -25,7 +26,7 @@ async function giveUp(job, why) {
   await db.job.update({ where: { id: job.id }, data: { status: 'failed', error: why.slice(0, 2000) } });
   if (job.kind === 'run') {
     await db.run.updateMany({ where: { id: job.refId, status: { in: ['queued', 'running'] } }, data: { status: 'failed', endedAt: new Date(), result: { why } } });
-  } else if (job.kind === 'derive') {
+  } else if (job.kind === 'derive' || job.kind === 'learn') {
     const d = await db.derivation.findUnique({ where: { id: job.refId } });
     if (d && ['queued', 'running'].includes(d.outcome)) {
       await db.derivation.update({ where: { id: d.id }, data: { outcome: 'failed', diagnosis: why } });
@@ -101,6 +102,7 @@ async function work(job) {
     if (job.kind === 'run') await executeRun(job.refId, log, job.payload ?? {});
     else if (job.kind === 'repair') await executeRepair(job.refId, job.payload ?? {}, log);
     else if (job.kind === 'derive') await executeDerive(job.refId, log);
+    else if (job.kind === 'learn') await executeLearn(job.refId, job.payload ?? {}, log);
     else throw new Error(`no idea how to do a "${job.kind}" job`);
     await log.flush();
     await db.job.update({ where: { id: job.id }, data: { status: 'done' } });

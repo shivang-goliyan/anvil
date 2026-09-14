@@ -72,26 +72,71 @@ export async function promotePlan(cap, { steps, origin, snapshot }) {
   return next;
 }
 
-// A capability and everything it learned or ran: plans, contracts, runs and repairs go with it.
+// A plan learned from a sentence becomes the next version, with the contract learned from its one real booking.
+export async function adoptLearnedPlan(cap, { steps, origin, contract, inputs, afterCommitUrl, snapshot }) {
+  return db.$transaction(async (tx) => {
+    await tx.pageSnapshot.upsert({ where: { hash: snapshot.hash }, create: { hash: snapshot.hash, url: cap.targetUrl, shape: snapshot.shape }, update: {} });
+    await tx.plan.updateMany({ where: { capabilityId: cap.id, active: true }, data: { active: false } });
+    const top = await tx.plan.aggregate({ where: { capabilityId: cap.id }, _max: { version: true } });
+    const plan = await tx.plan.create({ data: { capabilityId: cap.id, steps, origin, derivedFrom: snapshot.hash, version: (top._max.version ?? 0) + 1, active: true } });
+    const row = await tx.contract.create({
+      data: {
+        capabilityId: cap.id,
+        // afterCommitUrl: the booking learning made, which a later repair can read back without booking again
+        goldenSample: { inputs, records: contract.goldenSample, afterCommitUrl },
+        requiredFields: contract.requiredFields,
+        fieldTypes: contract.fieldTypes,
+        minRecords: contract.minRecords,
+        bounds: contract.bounds,
+        echoes: contract.echoes,
+        agreements: contract.agreements ?? {},
+        formats: contract.formats ?? {},
+      },
+    });
+    await tx.capability.update({ where: { id: cap.id }, data: { planId: plan.id, contractId: row.id, status: 'healthy' } });
+    return plan;
+  });
+}
+
+export async function queueLearn(capabilityId, payload) {
+  return db.$transaction(async (tx) => {
+    const derivation = await tx.derivation.create({ data: { capabilityId, entryUrl: payload.url, via: 'learned' } });
+    await tx.job.create({ data: { kind: 'learn', refId: derivation.id, payload } });
+    await tx.traceEvent.create({ data: { derivationId: derivation.id, seq: 1, kind: 'queued', label: 'learning queued, waiting for the worker', detail: { goal: payload.goal, learn: true } } });
+    return derivation;
+  });
+}
+
+// A capability and everything it learned or ran: plans, contracts, runs, repairs and learning jobs go with it.
 export async function removeCapability(id) {
   const where = { capabilityId: id };
-  const ids = [...(await db.run.findMany({ where, select: { id: true } })), ...(await db.repairAttempt.findMany({ where, select: { id: true } }))];
+  const ids = [...(await db.run.findMany({ where, select: { id: true } })), ...(await db.repairAttempt.findMany({ where, select: { id: true } })), ...(await db.derivation.findMany({ where, select: { id: true } }))];
   await db.job.deleteMany({ where: { refId: { in: ids.map((r) => r.id) } } });
   await db.capability.update({ where: { id }, data: { planId: null, contractId: null } });
   await db.capability.delete({ where: { id } });
 }
 
-// Puts a capability back to its hand-written first plan with nothing learned. Used by seeding.
+// Puts a capability back to its first plan with nothing learned: the plan learned from its sentence when there
+// is one saved, else a learning job, else (nothing to learn from) the fixture. Used by seeding and reset.
 export async function seedCapability(def, { reset = false } = {}) {
   const existing = await db.capability.findUnique({ where: { id: def.id } });
   if (existing && !reset) return { created: false };
   if (existing) await removeCapability(def.id);
+  const fixture = process.env.ANVIL_BOOKING_PLAN === 'fixture';
+  const learnable = !fixture && def.learn;
   await db.capability.create({
-    data: { id: def.id, name: def.name, goal: def.goal, targetUrl: def.targetUrl, inputSchema: def.inputSchema, canary: def.canary, engine: def.engine ?? 'browser' },
+    data: { id: def.id, name: def.name, goal: def.goal, targetUrl: def.targetUrl, inputSchema: def.inputSchema, canary: def.canary, engine: def.engine ?? 'browser', status: learnable && !def.learned ? 'deriving' : 'healthy' },
   });
-  const plan = await db.plan.create({ data: { capabilityId: def.id, steps: def.steps, origin: 'hand-written', version: 1, active: true } });
+  if (learnable && !def.learned) {
+    await queueLearn(def.id, def.learn());
+    return { created: true, learning: true };
+  }
+  const saved = learnable && def.learned;
+  const plan = await db.plan.create({
+    data: { capabilityId: def.id, steps: saved ? saved.steps : def.steps, origin: saved ? `learned from a sentence on ${saved.learnedAt.slice(0, 10)} (${saved.model})` : def.learn ? 'hand-written test fixture' : 'hand-written', version: 1, active: true },
+  });
   await db.capability.update({ where: { id: def.id }, data: { planId: plan.id } });
-  return { created: true };
+  return { created: true, learned: !!saved };
 }
 
 const slug = (s) => s.toLowerCase().replace(/^www\./, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);

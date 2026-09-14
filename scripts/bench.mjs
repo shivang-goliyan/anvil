@@ -5,6 +5,9 @@
 //   cases: comma-separated change kinds (default: every scripted kind, a typed change and 3 surprises).
 //   "check:<kind>" makes the change and then asks Anvil to check the website, instead of booking into it.
 //   "cosmetic" always goes through the check, and has to end with nothing to fix and no model asked.
+//   "learn" learns the booking from its sentence (POST /api/learn), then books with what it learned.
+//   Every other case starts from the hand-written booking fixture, so results stay comparable over time.
+//   BENCH_TARGET_PORT / BENCH_API_PORT move the local stack off 4420 / 3420.
 //   "read:events-redesign" is the capability that only reads: the events page is redesigned under it.
 //   "needs-person:check" and "needs-person:booking" start from a capability marked as needing a person:
 //   a check that finds the steps still fit clears that, and a failed booking after the cooldown repairs once.
@@ -42,6 +45,7 @@ const env = {
   ANAKIN_HOURLY_CREDITS: '1000',
   TRUST_PROXY: '',
   ANAKIN_MONITOR_ID: '',
+  ANVIL_BOOKING_PLAN: 'fixture',
 };
 const children = [];
 const start = (file) => {
@@ -117,6 +121,31 @@ for (const kind of cases) {
   const row = { kind, first: '-', broken: '-', repair: '-', tries: 0, seconds: 0, retry: '-', during: '-', after: '-', note: '' };
   results.push(row);
   await call('POST', '/api/target/reset', {});
+  if (kind === 'learn') {
+    const before = await bookings();
+    const q = await call('POST', '/api/learn', {});
+    row.first = q.status === 202 ? 'queued' : `refused ${q.status}`;
+    let d = null;
+    const t = Date.now();
+    for (let i = 0; q.json.derivationId && i < 600; i++) {
+      d = (await call('GET', `/api/derivations/${q.json.derivationId}`)).json;
+      if (!['queued', 'running'].includes(d.derivation.outcome)) break;
+      await sleep(1000);
+    }
+    const trace = d ? (await call('GET', `/api/derivations/${q.json.derivationId}`)).json.trace : [];
+    row.repair = d?.derivation.outcome ?? '-';
+    row.seconds = Math.round((Date.now() - t) / 1000);
+    row.tries = trace.filter((e) => e.kind === 'attempt').length;
+    row.during = (await bookings()) - before;
+    const cap = (await call('GET', '/api/capabilities/reserve-room')).json;
+    row.note = cap.plan?.origin ?? '';
+    row.after = (await book()).status;
+    const ok = row.repair === 'derived' && row.during === 1 && /^learned from a sentence/.test(row.note) && row.after === 'succeeded';
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(26)} learned ${String(row.repair).padEnd(8)} tries ${row.tries} ${String(row.seconds).padStart(3)}s  booked-while-learning ${row.during}  then booked ${row.after}  plan: ${row.note}`);
+    row.pass = ok;
+    if (!ok) console.log(trace.filter((e) => ['reject', 'execute', 'rehearse', 'validate', 'error', 'done'].includes(e.kind)).map((e) => `    ${e.kind}: ${e.label.slice(0, 300)}`).join('\n'));
+    continue;
+  }
   if (kind.startsWith('read:')) {
     const read = async () => {
       const q = await call('POST', '/api/runs', { capabilityId: 'harbor-events', inputs: {} });
@@ -230,7 +259,7 @@ for (const kind of cases) {
 }
 
 const passed = results.filter((r) => r.pass).length;
-const repairs = results.filter((r) => !['-', 'not-needed'].includes(r.repair));
+const repairs = results.filter((r) => r.kind !== 'learn' && !['-', 'not-needed'].includes(r.repair));
 const fine = results.filter((r) => r.repair === 'not-needed').length;
 const secs = repairs.map((r) => r.seconds).sort((a, b) => a - b);
 console.log(`\n${passed}/${results.length} passed · ${repairs.filter((r) => r.repair === 'repaired').length}/${repairs.length} repairs promoted · median repair ${secs[Math.floor(secs.length / 2)] ?? '-'}s · ${fine} checks found nothing to fix · ${Math.round((Date.now() - t0) / 1000)}s total`);

@@ -1,17 +1,56 @@
 // Tier B capability against the project's own target site.
-// The plan below is hand-written. Every later version of it is derived.
+// Its first plan is learned from the goal sentence below (demo/learned-booking.json, made by
+// scripts/learn-booking.mjs). The hand-written steps are a test fixture: the bench uses them so results stay
+// comparable, and they are the fallback when nothing has been learned and learning cannot run.
 
+import { readFileSync } from 'node:fs';
 import { capId, sandboxHost } from '../src/tenants.mjs';
+
+const LEARNED = new URL('../demo/learned-booking.json', import.meta.url);
+
+// what a booking has to hand back: the confirmation page, then the library's own record of it
+const OUTPUTS = {
+  reference: 'string',
+  name: 'string',
+  email: 'string',
+  seats: 'number',
+  room: 'string',
+  date: 'string',
+  time: 'string',
+  stored_reference: 'string',
+  stored_name: 'string',
+  stored_email: 'string',
+  stored_seats: 'number',
+  stored_room: 'string',
+  stored_date: 'string',
+  stored_time: 'string',
+};
+
+function learnedBooking() {
+  try {
+    const saved = JSON.parse(readFileSync(LEARNED, 'utf8'));
+    return Array.isArray(saved.steps) && saved.steps.length ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+// one sample booking to learn with, a few days ahead so the date is always in the future
+export const sampleBooking = () => ({ name: 'Priya Raman', email: 'priya.raman@example.com', seats: 3, room: 'Quiet room', date: new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10), time: '11:00' });
 
 // sandbox: a visitor's own copy of the demo site, reached on its own made-up host
 export function reserveRoom(sandbox = '') {
+  const targetUrl = (!sandbox && process.env.TARGET_URL) || `https://${sandboxHost(sandbox)}/`;
   return {
     id: capId('reserve-room', sandbox),
     name: 'Reserve a study room',
     goal:
       'Reserve a study room at Harbor Lane Library for the given patron, room, date and time, read the reference and details off the confirmation page, then look the booking up on the library\'s "Find my booking" page by reference and email and read back what the library actually stored.',
     // with no public TARGET_URL the remote browser gets this made-up origin and we answer it locally
-    targetUrl: (!sandbox && process.env.TARGET_URL) || `https://${sandboxHost(sandbox)}/`,
+    targetUrl,
+    outputs: OUTPUTS,
+    learned: learnedBooking(),
+    learn: () => ({ goal: reserveRoom(sandbox).goal, url: targetUrl, inputs: sampleBooking(), outputs: OUTPUTS }),
     inputSchema: { name: 'string', email: 'string', seats: 'number', room: 'string', date: 'string', time: 'string' },
     canary: '.site-header',
     steps: [

@@ -1,0 +1,183 @@
+{
+ "goal": "Reserve a study room at Harbor Lane Library for the given patron, room, date and time, read the reference and details off the confirmation page, then look the booking up on the library's \"Find my booking\" page by reference and email and read back what the library actually stored.",
+ "url": "/",
+ "inputs": {
+  "name": "Priya Raman",
+  "email": "priya.raman@example.com",
+  "seats": 3,
+  "room": "Quiet room",
+  "date": "2026-09-17",
+  "time": "11:00"
+ },
+ "outputs": {
+  "reference": "string",
+  "name": "string",
+  "email": "string",
+  "seats": "number",
+  "room": "string",
+  "date": "string",
+  "time": "string",
+  "stored_reference": "string",
+  "stored_name": "string",
+  "stored_email": "string",
+  "stored_seats": "number",
+  "stored_room": "string",
+  "stored_date": "string",
+  "stored_time": "string"
+ },
+ "steps": [
+  {
+   "kind": "navigate",
+   "url": "/"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#full_name",
+   "value": "{{name}}"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#email",
+   "value": "{{email}}"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#seats",
+   "value": "{{seats}}"
+  },
+  {
+   "kind": "select",
+   "selector": "select#room",
+   "value": "{{room}}"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#date",
+   "value": "{{date}}"
+  },
+  {
+   "kind": "select",
+   "selector": "select#time",
+   "value": "{{time}}"
+  },
+  {
+   "kind": "submit",
+   "selector": "button[type=\"submit\"]",
+   "commit": true
+  },
+  {
+   "kind": "assert",
+   "selector": "h1:has-text(\"Room reserved\")"
+  },
+  {
+   "kind": "extract",
+   "fields": {
+    "reference": {
+     "selector": "#reference",
+     "type": "string"
+    },
+    "name": {
+     "selector": ".summary-name",
+     "type": "string"
+    },
+    "email": {
+     "selector": ".summary-email",
+     "type": "string"
+    },
+    "seats": {
+     "selector": ".summary-seats",
+     "type": "number"
+    },
+    "room": {
+     "selector": ".summary-room",
+     "type": "string"
+    },
+    "date": {
+     "selector": ".summary-date",
+     "type": "string"
+    },
+    "time": {
+     "selector": ".summary-time",
+     "type": "string"
+    }
+   }
+  },
+  {
+   "kind": "navigate",
+   "url": "/find"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#find-reference",
+   "value": "{{out.reference}}"
+  },
+  {
+   "kind": "fill",
+   "selector": "input#find-email",
+   "value": "{{out.email}}"
+  },
+  {
+   "kind": "submit",
+   "selector": "button[type=\"submit\"]"
+  },
+  {
+   "kind": "assert",
+   "selector": "h1:has-text(\"Your booking\")"
+  },
+  {
+   "kind": "extract",
+   "fields": {
+    "stored_reference": {
+     "selector": "dd[data-record=\"reference\"]",
+     "type": "string"
+    },
+    "stored_name": {
+     "selector": "dd[data-record=\"name\"]",
+     "type": "string"
+    },
+    "stored_email": {
+     "selector": "dd[data-record=\"email\"]",
+     "type": "string"
+    },
+    "stored_seats": {
+     "selector": "dd[data-record=\"seats\"]",
+     "type": "number"
+    },
+    "stored_room": {
+     "selector": "dd[data-record=\"room\"]",
+     "type": "string"
+    },
+    "stored_date": {
+     "selector": "dd[data-record=\"date\"]",
+     "type": "string"
+    },
+    "stored_time": {
+     "selector": "dd[data-record=\"time\"]",
+     "type": "string"
+    }
+   }
+  }
+ ],
+ "model": "gemini-2.5-flash",
+ "attempts": 3,
+ "bookingsWhileLearning": 1,
+ "records": [
+  {
+   "reference": "HL-436E4D",
+   "name": "Priya Raman",
+   "email": "priya.raman@example.com",
+   "seats": 3,
+   "room": "Quiet room",
+   "date": "2026-09-17",
+   "time": "11:00",
+   "stored_reference": "HL-436E4D",
+   "stored_name": "Priya Raman",
+   "stored_email": "priya.raman@example.com",
+   "stored_seats": 3,
+   "stored_room": "Quiet room",
+   "stored_date": "2026-09-17",
+   "stored_time": "11:00"
+  }
+ ],
+ "learnedAt": "2026-09-14T02:38:27.807Z"
+}

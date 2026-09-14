@@ -84,6 +84,23 @@ That check matters here: the monitor compares the page's HTML, and Cloudflare pu
 
 Anyone can ask the monitor to look now with **Ask Anakin to check the website now** (`POST /api/check`): it calls the monitor's run endpoint (2 credits), one check every three minutes for everyone. Anakin does not move a monitor's `lastCheckedAt` for a check asked for this way, so the page watches for a new snapshot or change instead. Without a monitor (a local copy, the bench) the button starts the fit check directly.
 
+### Your own copy of the demo
+
+The page gives every visitor a sandbox cookie (`src/tenants.mjs`). The demo site keeps a separate copy of its state per sandbox: Anakin's browser reaches it on `<sandbox>.harbor-lane.anvil.test`, and the public view serves it under `/harbor-lane/t/<sandbox>/`. Each sandbox gets its own booking and events capabilities, seeded on first use, and every route (the site, changes, runs, repairs, the check button, activity) only sees its own; another sandbox's run or repair is a 404. Idle sandboxes are cleared after an hour. `/?shared=1` opens the shared copy that the Anakin monitor watches. Several workers run side by side (`deploy/anvil-worker@.service`): a job waits while its capability has another job running, and SQLite waits on a busy database instead of failing.
+
+### Learning a booking from one sentence
+
+`src/learn.mjs`. The booking capability's first plan is not written by hand: it is learned from its goal sentence, the booking page, the input fields and the fields a booking must hand back. Only on sites this project owns, because learning a booking makes one.
+
+1. Open the page in the cloud browser, plus any plain link on it that sounds like the goal ("Find my booking"); opening a link books nothing.
+2. The model writes every step, marking the one that books. Steps that could never run (pressing a `<form>` instead of its button, no booking step) are asked for again before anything is tried.
+3. Rehearse up to the booking button: every input has to be on the page before it is pressed.
+4. Make **one** real booking and read it back. The fields have to be filled with the right types, the typed details shown back, and the site's own record has to agree with its confirmation page.
+5. If that fails, the next try sees every page this one reached (the confirmation page, the record page), and runs only its steps after booking on the booking already made. Three tries at most; bookings are counted on the site's side.
+6. The contract is learned from that one booking, and the steps become the capability's plan.
+
+`scripts/learn-booking.mjs` runs this against a local copy of the demo site and saves the result to `demo/learned-booking.json`; reset and seeding give the booking capability that plan (labelled "learned from a sentence on <date>"), the page's **Learn the booking again from its sentence** button learns it again live (`POST /api/learn`), and with no saved plan a reset queues a learning job. The hand-written steps in `capabilities/reserve-room.mjs` are a test fixture: the bench starts every other case from them so results stay comparable.
+
 ### Reading any (allowlisted) site
 
 The *Read another site* form turns a URL and a sentence into a read capability (`src/derive-read.mjs`):
@@ -187,6 +204,8 @@ On 2026-09-14:
 - **The check button on the deployed page, through Anakin Website Monitoring** (a headless browser pressing the real buttons): booked; changed only the wording and colours; pressed *Ask Anakin to check the website now*; Anakin's signed alert arrived and the fit check ended as nothing to fix in 40s, 1 browser credit, no model call. Three minutes later: renamed the email box, pressed it again; the fit check found 1 of 7 saved selectors gone, the repair promoted v2 in 66s with one model call and 0 bookings, and the next booking succeeded on v2. No console errors. 14 credits for the whole arc, including both monitor checks.
 - **Harder changes, bench:** JavaScript app (repaired in 2 tries), form moved into an iframe (1), sign-in required with the demo account printed on the sign-in page (1), full redesign into a three-step wizard with radio buttons and every box renamed (2, after the fix above; 3 failed tries before it), a captcha (refused as blocked, no repair, one booking total), the check button with a captcha (blocked, no model asked), and the events page redesigned from cards to a table under the reading task (repaired in 2s, the same 6 records after). The earlier cases rerun after these changes: 10 of 10, every repair on its first attempt, 0 bookings during any of them.
 - **Harder changes, on production through Anakin's browser:** JavaScript app repaired in 2 tries (123s), iframe in 1 (57s), sign-in in 1 (60s), each with 0 bookings while repairing and the one real booking and the next booking both succeeding; the captcha was refused as blocked. The full redesign failed all three tries on the first run (rolled back, 0 bookings) and, with the fix, was repaired in 2 tries (136s) on the second. The reading task on the public events page, read through the URL Scraper: redesign detected as structural, repaired in 5s, same 6 records after, 3 credits.
+- **The booking learned from its sentence** (local copy of the demo site, local Chrome, no Anakin credits): `scripts/learn-booking.mjs` learned it in three tries with one booking: the first try's steps pressed the form itself and were refused before running, the second booked but read the confirmation page with guessed selectors, and the third read that same booking back correctly, including the library's own record. The saved plan has 16 steps. The bench case `learn` (`POST /api/learn` through the worker, then an ordinary booking with the learned steps) passed: learned in three tries (123s), one booking while learning, the following booking succeeded. A learning run through the page rendered its card with no console errors but did not learn the booking in three tries; that run's failures are what the fixes above address.
+- **Five visitors at once, on production** (`node scripts/load.mjs https://anvil.kgbnetwork.com 5`, three workers): each got a private copy of the demo site and started from the booking steps learned from the sentence; all five booked, renamed a box in their copy, saw their booking fail as structural, got a repair with 0 bookings made while repairing, made the one real booking and booked again. 420 s for all five together, 25 credits. The merged code also passed the bench again (every repair case; the `learn` case did not learn in three tries that run).
 - **Deployed arc on Anakin's browser:** first booking and a check learned with the site's own records; review page added; booking failed as structural; the repair rehearsed without booking, worked out that the failed run had booked nothing, checked the new reading steps on the last good booking, promoted v2 in 67s (after two models were unavailable), counted 0 bookings during the repair, and made the one real booking, which passed. Then the wrong-room trap: caught as a mismatch, no repair. 5 credits.
 
 ## Limitations
@@ -199,10 +218,11 @@ On 2026-09-14:
 - **The credit cap is an estimate** from published prices, and a browser session that runs past two minutes can overshoot it by a credit. Screenshots from the scraper are sometimes missing.
 - **Rehearsal trusts the commit mark.** A repair never presses the step marked commit, and plans that press anything between that step and reading the confirmation are rejected. A site where the booking happens on a step that looks like navigation (a "Continue" that silently books) could still be booked during a repair; on the demo site the site-side booking count is logged for every repair to catch exactly that.
 - **"Did the failed run book?" is inferred** from whether the page it stopped on still shows the form the new plan books from. A site whose confirmation page carries an identical form would be misread.
-- **One shared demo.** One worker does one job at a time, everyone sees the same demo site (and each other's bookings and repairs), and a reset puts it back for everyone. Breaks are limited per IP and refused while something is running.
+- **Sandboxes live on one machine.** Every visitor gets a private copy of the demo site and its capabilities, but they all share one server, one hourly Anakin credit cap and the free model quotas, and there are at most 40 private copies at once (after that a visitor gets the shared copy). The Anakin monitor only watches the shared copy. The count of copies in use lives in the API's memory and starts from zero after a restart.
 - **A full redesign is the hardest case and can take all three tries.** A wizard's second and third pages are only seen once an attempt reaches them. On production the first run of it failed all three tries and rolled back honestly; after the change above (open the last booking's confirmation page first, keep the page each rehearsal stops on) it was repaired in two.
 - **The demo site's made-up origin needs a workaround for redirects.** Chrome does not send the second leg of a redirected page load back through the request interception that answers `harbor-lane.anvil.test`, so GET redirects (like the sign-in redirect) are followed inside the forwarder. The page then shows the first URL, not the one redirected to. Real public sites do not go through the forwarder.
-- **Doing things is only shown on the demo site.** The browser plans work on any site, but the booking's first plan was written by hand and Anvil repairs it from there; it does not yet derive a new write capability from a sentence. Deriving from a sentence is shown for reading, on real sites.
+- **Doing things is only shown on the demo site.** Learning a booking from a sentence is limited to sites this project owns, on purpose: it makes a real booking. Deriving from a sentence on real sites is shown for reading only.
+- **Learning a booking is not reliable yet.** The model has not seen the confirmation page or the record page until a try reaches them, so it guesses their selectors, and three tries are sometimes not enough. Of five real learning runs on 2026-09-14, two learned the booking (both in three tries, one booking each) and three did not (three tries, one booking each, nothing saved; in the last one the free models' daily quota also ran out mid-run). The fixes after those runs (unrunnable steps asked for again without spending a try, an empty value caught where it was read, a guessed wait not failing a page that did load) are checked with fixed steps against the demo site, not yet with another learning run.
 - **The monitor checks every four hours** to keep credits down; the page's button asks for a check on demand.
 - **A fit check cannot see past the booking button.** It rehearses up to it and reads the last good booking, but what pressing it leads to (a new "check your details" page) only shows on a real booking. That change passes the fit check; the next booking then fails without booking anything, and the repair runs from there.
 - **Failed runs are not fit-checked.** A structural failure goes straight to a repair, so the one-off step timeout below can still cause a repair that was not needed.
@@ -230,6 +250,7 @@ Open http://localhost:3310. Useful `.env` values: `LLM_MODEL` takes the fallback
 Checks and scripts:
 
 ```bash
+node --env-file=.env scripts/learn-booking.mjs   # learn the booking from its sentence locally, save demo/learned-booking.json
 npm test                    # triage, robots.txt, extraction, Wire records, the model chain
 npm run phase2              # run -> break -> fail -> repair -> run, through the API
 npm run breaks              # all four break kinds, stacked
@@ -253,7 +274,7 @@ Deployment: `deploy/` has the three systemd units and the Caddy block used for t
 src/            api, worker, run and repair loops, derivation, triage, contract, Anakin client, conduct
 target/         the demo site and its break kinds
 web/            the page
-capabilities/   the hand-written first plan for the booking capability
+capabilities/   the booking (with its hand-written test fixture) and the events read capability
 prisma/         schema and migrations
 scripts/        checkpoints, seeding, recording the demo run, monitor setup
 deploy/         systemd units and Caddy block

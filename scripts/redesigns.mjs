@@ -61,7 +61,7 @@ async function learnOnArchive(site, id) {
       const contract = deriveContract(dry.records, {});
       await db.capability.create({ data: { id, name: site.name, goal: site.goal, entryUrl: site.url, targetUrl: site.url, inputSchema: {}, canary: '', engine: 'scrape', status: 'deriving' } });
       await adoptFirstPlan(id, { engine: 'scrape', targetUrl: site.url, canary: d.canary, steps: d.plan.steps, origin: `learned on the ${site.at.slice(0, 4)} Wayback copy (${d.model})`, contract, snapshot: pageShape(page.html) });
-      return { tries: n, model: d.model, records: dry.records.length, sample: dry.records[0], steps: d.plan.steps };
+      return { tries: n, model: d.model, records: dry.records.length, steps: d.plan.steps };
     }
     feedback = dry.problems.join('; ');
   }
@@ -104,13 +104,14 @@ for (const site of SITES.filter((s) => !only || only.has(s.name))) {
         outcome: rep.outcome,
         tries: trace.filter((e) => e.kind === 'attempt').length,
         seconds: Math.round((Date.now() - t) / 1000),
-        changed: trace.filter((e) => e.kind === 'diff').map((e) => e.label),
+        // headings and titles are other people's words; what the saved selectors find is what matters here
+        changed: trace.filter((e) => e.kind === 'diff' && !/^(headings|title) changed/.test(e.label)).map((e) => e.label),
         rejected: trace.filter((e) => ['reject', 'validate'].includes(e.kind) && e.detail?.problems?.length).map((e) => e.label),
         models: trace.filter((e) => e.kind === 'derive' && e.detail?.model).map((e) => e.detail.model),
       };
       if (rep.outcome === 'repaired') {
         const again = await runLive(id);
-        row.after = { status: again.run.status, records: again.run.result?.records?.length ?? 0, sample: again.run.result?.records?.[0] ?? null, steps: (await db.plan.findFirst({ where: { capabilityId: id, active: true } })).steps };
+        row.after = { status: again.run.status, records: again.run.result?.records?.length ?? 0, steps: (await db.plan.findFirst({ where: { capabilityId: id, active: true } })).steps };
       }
     }
   } catch (err) {

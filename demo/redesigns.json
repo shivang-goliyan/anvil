@@ -13,11 +13,6 @@
     "tries": 1,
     "model": "openai/gpt-oss-120b",
     "records": 30,
-    "sample": {
-     "title": "Netflix stops paying the ‘Apple tax’ on its $853M in annual iOS revenue",
-     "link": "https://techcrunch.com/2018/12/31/netflix-stops-paying-the-apple-tax-on-its-853m-in-annual-ios-revenue/",
-     "points": 171
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -69,11 +64,6 @@
    "after": {
     "status": "succeeded",
     "records": 30,
-    "sample": {
-     "title": "Fable 5.1 Solves the Cyphral Distich, a 370-year-old cipher",
-     "link": "https://www.vals.ai/blogs/fable-solves-cyphral-distich",
-     "points": 513
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -116,11 +106,6 @@
     "tries": 1,
     "model": "gemini-3.6-flash",
     "records": 25,
-    "sample": {
-     "name": "MaximAbramchuck / awesome-interview-questions",
-     "description": "A curated awesome list of lists of interview questions. Feel free to contribute! 🎓",
-     "total_stars": 22668
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -161,7 +146,6 @@
     "tries": 1,
     "seconds": 16,
     "changed": [
-     "headings changed from [\"Trending\"] to [\"Navigation Menu\",\"Trending\",\"JustVugg / colibri\",\"ever-co / ever-gauzy\",\"bilawalsidhu / gods-eye-view\",\"tech-leads-club / agent-skills\",\"melgarafael / DeskcommCRM\",\"calesthio / OpenMontage\",\"asgeirtj / system_prompts_leaks\",\"vxcontrol / pentagi\",\"multimodal-art-projection / YuE\",\"yuliskov / SmartTube\",\"alphaXiv / OpenResearch\",\"debpalash / VoiceStudio\",\"SnailSploit / Claude-Red\",\"alibaba / open-code-review\",\"jihe520 / MathModelAgent\",\"tonhowtf / omniget\",\"jiji262 / douyin-downloader\",\"Swordfish90 / cool-retro-term\",\"huggingface / transformers\",\"Footer\"]",
      "form count went from 1 to 0",
      "the saved check \"ol.repo-list\" matches nothing on the live page",
      "\"ol.repo-list > li\", one element per record, matches 0 elements on the live page"
@@ -174,11 +158,6 @@
    "after": {
     "status": "succeeded",
     "records": 19,
-    "sample": {
-     "name": "JustVugg / colibri",
-     "description": "Run frontier MoE models on hardware you already own — pure C, zero deps, experts streamed from disk. Tiny engine, immense model. 🐦",
-     "total_stars": 30007
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -220,11 +199,6 @@
     "tries": 1,
     "model": "gemini-3.6-flash",
     "records": 22,
-    "sample": {
-     "name": "Django Girls Legon",
-     "date": "02 Feb. – 04 Feb. 2018",
-     "location": "University of Ghana Campus, Legon Boundary, Accra, Ghana"
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -273,11 +247,6 @@
     "tries": 1,
     "model": "gemini-3.6-flash",
     "records": 50,
-    "sample": {
-     "title": "Procedural Macros in Rust 2018",
-     "date": "Dec. 21",
-     "link": "https://blog.rust-lang.org/2018/12/21/Procedural-Macros-in-Rust-2018.html"
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -323,11 +292,6 @@
     "tries": 1,
     "model": "gemini-3.6-flash",
     "records": 9,
-    "sample": {
-     "release_type": "mainline:",
-     "version": "4.15-rc6",
-     "release_date": "2017-12-31"
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -375,10 +339,6 @@
     "tries": 1,
     "model": "gemini-3.6-flash",
     "records": 20,
-    "sample": {
-     "title": "[$] An introduction to the BPF Compiler Collection",
-     "link": "https://lwn.net/Articles/742082/"
-    },
     "steps": [
      {
       "kind": "navigate",
@@ -416,7 +376,6 @@
     "tries": 3,
     "seconds": 205,
     "changed": [
-     "headings changed from [\"Welcome to LWN.net\"] to [\"Welcome to LWN.net\",\"[$] Accelerating the kernel's build process\",\"[$] PostgreSQL 19's \\\"scary patch contest\\\"\",\"[$] LWN.net Weekly Edition for September 10, 2026\",\"[$] Typst makes big strides\",\"[$] Stabilizing Rust's never type\",\"[$] CERN's migration path from CentOS Linux to Debian\",\"[$] Fixing the TCMalloc regression with RSEQ operations\",\"[$] Deterministic testing for multithreaded Python\",\"[$] Recent work in memory tiering\",\"LWN.net Weekly Edition for September 3, 2026\",\"Reminder: subscription price change coming\",\"Kernel prepatch 7.3-rc3\",\"EuroPython 2026 videos published\",\"Two stable kernel updates for Friday\",\"Security updates for Friday\",\"Forgejo 16.0.4 and 15.0.8 address critical security vulnerability\",\"Julia 1.13 released\",\"Security updates for Thursday\",\"A decade of Rustls\",\"LibreOffice Base survey results\"]",
      "form 1: action changed from \"https://lwn.net/login\" to \"https://lwn.net/Login/\"",
      "form 1: field \"Username\" (label \"null\") is gone; a text field \"uname\" (label \"User:\") sits in the same position, likely a rename",
      "form 1: field \"Password\" (label \"null\") is gone; a password field \"pword\" (label \"Password:\") sits in the same position, likely a rename",

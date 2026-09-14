@@ -122,19 +122,19 @@ export async function fitCheck(cap, log) {
 
       // 3. the steps after the booking button, on a booking that already exists
       const last = await db.run.findFirst({ where: { capabilityId: cap.id, status: 'succeeded' }, orderBy: { createdAt: 'desc' }, select: { inputs: true, result: true } });
-      const url = last?.result?.afterCommitUrl;
+      const url = last?.result?.afterCommitUrl ?? cap.contract.goldenSample?.afterCommitUrl;
       const opened = url ? await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => null) : null;
       if (!url || !opened || opened.status() >= 400) {
         log('fit', url ? 'the last good booking is gone from the website, so the steps after the booking button are not checked this time' : 'there is no earlier booking to read back, so the steps after the booking button are not checked this time', { stage: 'after', skipped: true });
       } else {
         let after;
         try {
-          after = await session.within(120_000, runPlan(cap.plan, last.inputs, session, { baseUrl: cap.targetUrl, startAt: result.commitIndex + 1, startUrl: url }), 'reading the last good booking');
+          after = await session.within(120_000, runPlan(cap.plan, last?.inputs ?? cap.contract.goldenSample.inputs, session, { baseUrl: cap.targetUrl, startAt: result.commitIndex + 1, startUrl: url }), 'reading the last good booking');
         } catch (err) {
           if (err instanceof OverBudget) throw err;
           return await stop(`the saved steps after booking got stuck on the last good booking: ${err.message.split('\n')[0]}`, err);
         }
-        const check = checkContract(cap.contract, after.records, last.inputs);
+        const check = checkContract(cap.contract, after.records, last?.inputs ?? cap.contract.goldenSample.inputs);
         log('validate', check.pass ? 'read the last good booking with the saved steps, and it passed the check' : `read the last good booking with the saved steps, but the check failed: ${check.problems.join('; ')}`, {
           records: after.records,
           problems: check.problems,
