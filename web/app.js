@@ -217,6 +217,8 @@ function recordsView(records, limit = 8) {
 
 const timeline = $('timeline');
 const following = new Set();
+// bookings a repair makes once it is fixed, which that repair's card shows
+const madeByRepair = new Set();
 
 function place(node, { scroll = false } = {}) {
   $('empty')?.remove();
@@ -769,7 +771,11 @@ function repairView(card, capability) {
       } else if (e.kind === 'reuse') {
         add({ icon: '✓', tone: 'good', title: 'Not booking twice', text: 'The old steps had already made the booking before they got stuck, so the new steps read that booking back instead of making another.' });
       } else if (e.kind === 'retry' && d.runId) {
-        if (/^now making/.test(e.label)) retryRun = d.runId;
+        if (/^now making/.test(e.label)) {
+          retryRun = d.runId;
+          // the repair card follows this booking itself; the activity feed must not call it someone else's
+          madeByRepair.add(d.runId);
+        }
         add({ icon: '→', title: retryRun ? 'Now the one real booking, with the new steps' : 'Not retrying the booking', text: retryRun ? 'The booking that failed is made again, once, using the saved new steps. It shows up just below.' : cap1(e.label) });
       } else if (e.kind === 'validate') {
         if (running) running.querySelector('p').textContent = 'every step ran, in the same cloud browser';
@@ -1675,7 +1681,7 @@ async function watchActivity() {
     $('live-strip').hidden = false;
     $('live-strip').textContent = `Live right now: ${sandboxes} cop${sandboxes === 1 ? 'y' : 'ies'} of the demo in use, ${running} job${running === 1 ? '' : 's'} running across all of them.`;
   }
-  for (const r of json.runs ?? []) if (!following.has(`run:${r.id}`)) follow('run', r.id, { others: true, scroll: false });
+  for (const r of json.runs ?? []) if (!following.has(`run:${r.id}`) && !madeByRepair.has(r.id)) follow('run', r.id, { others: true, scroll: false });
   for (const r of json.repairs) {
     if (following.has(`repair:${r.id}`) || ['run-failure', 'cooldown'].includes(r.trigger)) continue;
     if (r.trigger === 'monitor') {
