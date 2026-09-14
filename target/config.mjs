@@ -2,6 +2,25 @@
 
 export const ROOMS = ['Quiet room', 'Group room', 'Media room'];
 export const SLOTS = ['09:00', '11:00', '14:00', '16:00'];
+// shown on the sign-in page itself, for everyone: the "require sign-in" change never asks a visitor for anything
+export const DEMO_ACCOUNT = { email: 'demo@harborlane.org', password: 'reading-room' };
+export const EVENTS = [
+  { title: 'Poetry night', date: '2026-09-18', time: '18:00', room: 'Media room', seats: 12 },
+  { title: 'Homework club', date: '2026-09-19', time: '16:00', room: 'Group room', seats: 5 },
+  { title: 'Local history talk', date: '2026-09-21', time: '11:00', room: 'Media room', seats: 20 },
+  { title: 'Chess for beginners', date: '2026-09-22', time: '14:00', room: 'Quiet room', seats: 8 },
+  { title: 'Book swap', date: '2026-09-24', time: '09:00', room: 'Group room', seats: 30 },
+  { title: 'Coding for kids', date: '2026-09-26', time: '11:00', room: 'Media room', seats: 0 },
+];
+// the full redesign renames every box and splits the form into a wizard
+export const WIZARD = {
+  room: { name: 'space', label: 'Pick a space' },
+  date: { name: 'visit_day', label: 'Which day?' },
+  time: { name: 'slot', label: 'Arrival slot' },
+  name: { name: 'patron_full_name', label: "Who's coming?" },
+  email: { name: 'reach_me_at', label: 'Where we send the confirmation' },
+  seats: { name: 'party_count', label: 'People in your group' },
+};
 
 export function freshConfig() {
   return {
@@ -30,6 +49,15 @@ export function freshConfig() {
     intro: 'Rooms seat up to eight. We hold a room for fifteen minutes past the start time.',
     banner: null,
     colors: { ink: '#1f3a2e', paper: '#f6f4ef' },
+    // the harder changes: how the site is built, not what its boxes are called
+    jsApp: false,
+    appSalt: 'a1',
+    iframe: false,
+    signIn: false,
+    redesign: false,
+    captcha: false,
+    // the events page, for the capability that only reads
+    eventsLayout: 'list',
     breaks: [],
   };
 }
@@ -45,6 +73,12 @@ export const BREAKS = {
   'wrong-room': 'Quietly book a different room than the one asked for, while the confirmation page shows the right one',
   'new-reference-format': 'Switch booking references to a new format',
   cosmetic: 'Change only the wording and colours: new title, labels and banner, same form underneath',
+  'js-app': 'Rebuild the booking page as a JavaScript app: drawn in the browser, generated class names, no ids or names, booked without a page load',
+  iframe: 'Move the booking form into an iframe',
+  'sign-in': 'Require signing in before booking, with a demo account shown on the sign-in page',
+  redesign: 'Redesign everything at once: a three-step wizard, radio buttons, every box renamed, a new confirmation page',
+  captcha: 'Add a captcha to the booking form',
+  'events-redesign': 'Redesign the events page: the list of cards becomes a table with new names for everything',
   custom: 'A change the visitor typed in',
 };
 
@@ -192,6 +226,21 @@ export function applyBreak(config, kind, key, params) {
     mark(config, { kind });
     return { changed: true, detail: `new title "${config.title}", a banner, purple colours, and the boxes now read ${config.fields.map((f) => `"${f.label}"`).join(', ')} (were ${before.map((l) => `"${l}"`).join(', ')}). Box names, the form and the button are unchanged` };
   }
+  if (kind === 'js-app') {
+    if (config.jsApp) return { changed: false, detail: 'the booking page is already a JavaScript app' };
+    config.appSalt = tag() + tag();
+    return toggle(config, kind, 'jsApp', 'the booking page is now a JavaScript app: the form is drawn in the browser with generated class names and no ids or names, the booking is sent with fetch, and the confirmation is drawn in place');
+  }
+  if (kind === 'iframe') return toggle(config, kind, 'iframe', 'the booking form now sits inside an iframe on the page');
+  if (kind === 'sign-in') return toggle(config, kind, 'signIn', `booking now needs signing in first; the sign-in page shows a demo account (${DEMO_ACCOUNT.email})`);
+  if (kind === 'redesign') return toggle(config, kind, 'redesign', 'everything was redesigned at once: a three-step wizard (when, who, check), radio buttons for the room and time, every box renamed, and a new confirmation page');
+  if (kind === 'captcha') return toggle(config, kind, 'captcha', 'the booking form now has a captcha');
+  if (kind === 'events-redesign') {
+    if (config.eventsLayout === 'table') return { changed: false, detail: 'the events page is already a table' };
+    config.eventsLayout = 'table';
+    mark(config, { kind });
+    return { changed: true, detail: 'the events page was redesigned: its list of event cards is now a table, with new class names and column names for everything' };
+  }
   if (kind === 'custom') return custom(config, params);
   throw new Error(`unknown break kind "${kind}"`);
 }
@@ -200,10 +249,21 @@ export function applyBreak(config, kind, key, params) {
 export function describe(config) {
   const byKey = Object.fromEntries(config.fields.map((f) => [f.key, f]));
   const field = (f) => `${f.label} (name="${f.name}")`;
-  const pages = config.seatsFirst
-    ? [`page 1: ${field(byKey.seats)}, then Continue`, `page 2: ${field(byKey.name)}, ${field(byKey.email)}, then ${config.submitLabel}`]
-    : [`page 1: ${config.fields.map(field).join(', ')}, then ${config.submitLabel}`];
-  if (config.reviewStep) pages.push(`page ${pages.length + 1}: check your details, then Confirm reservation`);
-  pages.push(`confirmation: ${config.receiptLayout ? 'receipt layout (rebuilt markup)' : 'original layout'}`);
+  const captcha = config.captcha ? ', a captcha' : '';
+  const pages = config.signIn ? ['sign-in: the demo account is shown on the page, then Sign in'] : [];
+  if (config.jsApp) {
+    pages.push(`one JavaScript app page: ${config.fields.map((f) => f.label).join(', ')}${captcha}, then ${config.submitLabel}, booked without a page load`, 'confirmation: drawn by JavaScript in place');
+  } else if (config.redesign) {
+    const w = (k) => `${WIZARD[k].label} (name="${WIZARD[k].name}")`;
+    pages.push(`step 1: ${w('room')} as radio buttons, ${w('date')}, ${w('time')} as radio buttons, then Next`, `step 2: ${w('name')}, ${w('email')}, ${w('seats')}, then Next`, `step 3: check it${captcha}, then Book this room`, 'confirmation: a redesigned ticket');
+  } else {
+    const frame = config.iframe ? ' (inside an iframe)' : '';
+    const last = config.reviewStep ? '' : captcha;
+    if (config.seatsFirst) pages.push(`page 1${frame}: ${field(byKey.seats)}, then Continue`, `page 2: the other boxes${last}, then ${config.submitLabel}`);
+    else pages.push(`page 1${frame}: ${config.fields.map(field).join(', ')}${last}, then ${config.submitLabel}`);
+    if (config.reviewStep) pages.push(`page ${pages.length + 1}: check your details${captcha}, then Confirm reservation`);
+    pages.push(`confirmation: ${config.receiptLayout ? 'receipt layout (rebuilt markup)' : 'original layout'}`);
+  }
+  pages.push(`events page: ${config.eventsLayout === 'table' ? 'a table (redesigned)' : 'a list of event cards'}`);
   return { version: config.version, pages, breaks: config.breaks };
 }

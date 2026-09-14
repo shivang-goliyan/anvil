@@ -16,8 +16,8 @@ export class NotAllowed extends Error {
 // Our own demo target is not third-party.
 function firstParty(host) {
   if (host.endsWith('.anvil.test')) return true;
-  const own = process.env.TARGET_URL && new URL(process.env.TARGET_URL).hostname;
-  return own === host;
+  const own = [process.env.TARGET_URL, process.env.DEMO_PUBLIC_URL].filter(Boolean).map((u) => new URL(u).hostname);
+  return own.includes(host);
 }
 
 export function allowedSites() {

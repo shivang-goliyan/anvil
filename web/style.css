@@ -230,6 +230,7 @@ h1 em::after {
 .breaks .brk.done { background: var(--ember-soft); border-color: rgba(255, 91, 31, 0.35); color: #9a3412; }
 .breaks .brk .ico { flex: 0 0 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--line-2); font-size: 12px; }
 .breaks .brk.done .ico { background: var(--ember); color: #fff; }
+.breaks .breaks-head { grid-column: 1 / -1; margin: 8px 0 0; font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
 .breaks .reset { grid-column: 1 / -1; justify-content: center; border-style: dashed; color: var(--muted); }
 .breaks .brk.wild { grid-column: 1 / -1; background: var(--ink); color: #fff; border-color: var(--ink); }
 .breaks .brk.wild .ico { background: var(--ember); color: #fff; }

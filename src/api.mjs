@@ -9,6 +9,7 @@ import { createReadCapability, seedCapability } from './capabilities.mjs';
 import { onAllowlist, allowedSites } from './conduct.mjs';
 import { creditsUsed, hourlyCap } from './budget.mjs';
 import { reserveRoom } from '../capabilities/reserve-room.mjs';
+import { harborEvents } from '../capabilities/harbor-events.mjs';
 import { SHOTS, SHOT_NAME, beforeAndAfter } from './shots.mjs';
 import { askForCheck, checkLanded } from './monitor.mjs';
 
@@ -201,7 +202,9 @@ const routes = [
       if (/^\/+_admin/.test(to.pathname)) return send(res, 404, { error: 'nothing here' });
       const page = await fetch(to, { redirect: 'manual' }).catch(() => null);
       if (!page) return send(res, 502, { error: 'the demo site is not answering' });
-      res.writeHead(page.status, { 'content-type': page.headers.get('content-type') ?? 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      // the demo site's own redirects (to its sign-in page, say) stay inside this view
+      const location = page.headers.get('location');
+      res.writeHead(page.status, { 'content-type': page.headers.get('content-type') ?? 'text/html; charset=utf-8', 'cache-control': 'no-store', ...(location?.startsWith('/') && { location: `/harbor-lane${location}` }) });
       return res.end(Buffer.from(await page.arrayBuffer()));
     },
   ],
@@ -218,7 +221,7 @@ const routes = [
     /^\/api\/target$/,
     async (req, res) => {
       const c = await targetAdmin('/_admin/config');
-      const site = { cosmetic: !!c.banner, org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm, wrongRoom: c.wrongRoom, referenceStyle: c.referenceStyle };
+      const site = { eventsTable: c.eventsLayout === 'table', cosmetic: !!c.banner, jsApp: c.jsApp, iframe: c.iframe, signIn: c.signIn, redesign: c.redesign, captcha: c.captcha, org: c.org, title: c.title, submitLabel: c.submitLabel, fields: c.fields, seatsFirst: c.seatsFirst, reviewStep: c.reviewStep, receiptLayout: c.receiptLayout, formId: c.formId, confirm: c.confirm, wrongRoom: c.wrongRoom, referenceStyle: c.referenceStyle };
       return send(res, 200, { ...c.described, site, kinds: c.kinds, owned: OWNED, busy: await busyTierB(), monitor: monitorInfo() });
     },
   ],
@@ -327,6 +330,7 @@ const routes = [
       if (action === 'reset') {
         const c = await targetAdmin('/_admin/reset', {});
         await seedCapability(reserveRoom(), { reset: true });
+        await seedCapability(harborEvents(), { reset: true });
         return send(res, 200, { detail: 'the site and the capability are back to how they started', ...c.described });
       }
       const own = body.kind === 'custom' ? { field: body.field, label: body.label, button: body.button, order: body.order } : {};
@@ -437,7 +441,7 @@ const routes = [
       const cap = typeof body.capabilityId === 'string' && (await db.capability.findUnique({ where: { id: body.capabilityId } }));
       if (!cap) return send(res, 404, { error: 'no capability with that id' });
       if (!cap.contractId) return send(res, 409, { error: 'this capability has never had a good run, so there is no contract to repair against yet' });
-      if (cap.engine !== 'browser') return send(res, 409, { error: 'repair is only wired up for browser capabilities so far' });
+      if (cap.engine === 'wire') return send(res, 409, { error: 'this capability runs a ready-made Wire action, so there are no steps of ours to repair' });
       try {
         const repair = await queueRepair(cap.id, { trigger: 'manual', failure: 'Someone asked Anvil to repair itself. No run has failed.' });
         return send(res, 202, { id: repair.id, outcome: repair.outcome, poll: `/api/repairs/${repair.id}` });

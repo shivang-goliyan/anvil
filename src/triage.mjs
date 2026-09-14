@@ -2,10 +2,11 @@ import { StepError } from './plan.mjs';
 import { AnakinError } from './errors.mjs';
 import { NotAllowed } from './conduct.mjs';
 
-const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffic|verify you are human|cf-challenge/i;
+export const BLOCK_WORDS = /captcha|are you a robot|access denied|unusual traffic|verify you are human|cf-challenge/i;
 
 // transient -> retry, blocked -> degraded, structural -> repair, empty -> fine.
-export function triage({ error, contractCheck, records, canaryPresent, pageText = '', sent = null }) {
+// rendered: the page came back with real content even though the canary is gone (a read of a redesigned page)
+export function triage({ error, contractCheck, records, canaryPresent, rendered = false, pageText = '', sent = null }) {
   if (error) {
     const status = error.docStatus ?? error.status;
     if (error instanceof NotAllowed) return { kind: 'blocked', why: `we may not fetch it: ${error.message}` };
@@ -13,10 +14,12 @@ export function triage({ error, contractCheck, records, canaryPresent, pageText 
       return { kind: 'blocked', why: `our own Anakin account problem: ${error.message}` };
     if (error instanceof AnakinError && (['network', 'browser_unavailable'].includes(error.code) || error.status === 429 || error.status >= 500))
       return { kind: 'transient', why: `Anakin trouble: ${error.message}` };
-    if (status === 403 || BLOCK_WORDS.test(pageText)) return { kind: 'blocked', why: `the site is refusing us (HTTP ${status ?? '?'})` };
+    const check = String(pageText).match(BLOCK_WORDS)?.[0];
+    if (check) return { kind: 'blocked', why: `the site put a "${check.toLowerCase()}" check in front of it` };
+    if (status === 403) return { kind: 'blocked', why: 'the site is refusing us (HTTP 403)' };
     if (status === 429 || status >= 500) return { kind: 'transient', why: `the site answered HTTP ${status}` };
     if (error instanceof StepError && error.reason === 'navigation') return { kind: 'transient', why: error.message };
-    if (error instanceof StepError && canaryPresent) return { kind: 'structural', why: `page rendered fine but ${error.message}` };
+    if (error instanceof StepError && (canaryPresent || rendered)) return { kind: 'structural', why: `page rendered fine but ${error.message}` };
     if (error instanceof StepError) return { kind: 'transient', why: `page may not have rendered: ${error.message}` };
     return { kind: 'transient', why: error.message };
   }

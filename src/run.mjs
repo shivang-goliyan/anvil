@@ -1,5 +1,5 @@
 import { openBrowser } from './anakin.mjs';
-import { runPlan } from './plan.mjs';
+import { runPlan, contentWithFrames } from './plan.mjs';
 import { deriveContract, checkContract, amendContract } from './contract.mjs';
 import { pageShape, compactHtml } from './page-shape.mjs';
 import { triage } from './triage.mjs';
@@ -37,7 +37,9 @@ async function readAttempt(cap, log) {
     return { result, error: null, canaryPresent: hasSelector(result.finalHtml, cap.canary), pageText: '' };
   } catch (error) {
     const html = last?.html ?? '';
-    return { result: null, error, canaryPresent: hasSelector(html, cap.canary), pageText: last?.markdown ?? '', pageAtFailure: html ? pageShape(html).shape : null };
+    // a redesign can take the canary with it; a page with plenty of text on it still rendered
+    const rendered = (last?.markdown ?? '').trim().length > 200;
+    return { result: null, error, canaryPresent: hasSelector(html, cap.canary), rendered, pageText: last?.markdown ?? '', pageAtFailure: html ? pageShape(html).shape : null };
   }
 }
 
@@ -80,7 +82,7 @@ async function attempt(cap, inputs, log) {
     const canaryPresent = (await session.within(5000, session.page.locator(cap.canary).count(), 'looking for the page canary').catch(() => 0)) > 0;
     const pageText = error ? await session.within(5000, session.page.innerText('body'), 'reading the page text').catch(() => '') : '';
     // structure only in the trace; the trimmed markup goes to the repair job, never to the UI
-    const failedHtml = error ? await session.within(5000, session.page.content(), 'reading the page').catch(() => '') : '';
+    const failedHtml = error ? await session.within(5000, contentWithFrames(session.page), 'reading the page').catch(() => '') : '';
     const pageAtFailure = error ? pageShape(failedHtml).shape : null;
     const stuckOn = error ? { url: session.page.url(), html: compactHtml(failedHtml, 8000), committed: !!error.committed, afterCommitUrl: error.afterCommitUrl ?? null, ...(error.committed && { shape: pageAtFailure }) } : null;
     return { result, error, canaryPresent, pageText, pageAtFailure, stuckOn, sent: result?.sent ?? null, committed: result?.committed ?? !!error?.committed, afterCommitUrl: result?.afterCommitUrl ?? error?.afterCommitUrl ?? null };
@@ -94,7 +96,7 @@ async function attempt(cap, inputs, log) {
 async function runCapability(cap, inputs, log) {
   for (let tryNo = 1; tryNo <= 3; tryNo++) {
     log('run', `running plan v${cap.plan.version}${tryNo > 1 ? ` (retry ${tryNo - 1})` : ''}`, { planId: cap.plan.id, version: cap.plan.version, try: tryNo });
-    const { result, error, canaryPresent, pageText, pageAtFailure, stuckOn, sent, committed, afterCommitUrl } = await attempt(cap, inputs, log);
+    const { result, error, canaryPresent, rendered, pageText, pageAtFailure, stuckOn, sent, committed, afterCommitUrl } = await attempt(cap, inputs, log);
     if (sent) log('sent', sent.missing.length ? `before booking, the page did not hold: ${sent.missing.join(', ')}` : `before booking, the page held every detail asked for (${sent.found.join(', ')})`, sent);
 
     if (error instanceof OverBudget) {
@@ -141,7 +143,7 @@ async function runCapability(cap, inputs, log) {
         pageAtFailure,
       });
 
-    const verdict = triage({ error, contractCheck, records, canaryPresent, pageText, sent });
+    const verdict = triage({ error, contractCheck, records, canaryPresent, rendered, pageText, sent });
     if (verdict.kind === 'ok') return { status: 'succeeded', records, afterCommitUrl };
     log('triage', `${verdict.kind}: ${verdict.why}`, { kind: verdict.kind, canaryPresent });
 
@@ -185,8 +187,8 @@ export async function executeRun(runId, log, { afterRepair = null } = {}) {
 
   if (out.failureKind === 'structural') {
     const fresh = await loadCapability(cap.id);
-    if (cap.engine !== 'browser') {
-      log('repair', 'automatic repair is only wired up for browser capabilities so far, so this read capability stays as it is');
+    if (cap.engine === 'wire') {
+      log('repair', 'this capability runs a ready-made Wire action, so there are no steps of ours to repair');
     } else if (!fresh.contract) {
       log('repair', 'no contract yet, so a repaired plan would have nothing to be checked against. Not repairing');
     } else if (afterRepair) {

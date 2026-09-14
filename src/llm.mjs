@@ -51,8 +51,10 @@ function keysFor(entry) {
 const COOLDOWN_MS = 10 * 60 * 1000;
 const benched = new Map();
 
-// Free keys get a daily allowance. A key that runs out rests until the next UTC midnight.
+// Free keys get a daily allowance. A key that runs out rests until the next UTC midnight. Groq and Gemini
+// count each model separately, so there it is that model on that key that rests; OpenRouter counts the account.
 const emptyUntil = new Map();
+const allowance = (a) => (a.entry.provider === 'openrouter' || a.entry.provider === 'custom' ? a.key : `${a.key} ${a.entry.model}`);
 const nextUtcMidnight = () => new Date(new Date().setUTCHours(24, 0, 0, 0)).getTime();
 
 // rotate starts the chain further along, so a retry gets a different model's take instead of the same mistake
@@ -65,7 +67,7 @@ export async function askForJson({ system, prompt, model = process.env.LLM_MODEL
   const attempts = entries.flatMap((entry) => keysFor(entry).map((key, i) => ({ entry, key, keyLabel: `${entry.provider} key ${i + 1}` })));
   if (!attempts.length) throw new LlmError('no API key is set for any model in LLM_MODEL');
 
-  const usable = (a) => !(emptyUntil.get(a.key) > Date.now());
+  const usable = (a) => !(emptyUntil.get(allowance(a)) > Date.now());
   const rested = attempts.filter((a) => usable(a) && !(benched.get(a.entry.label) > Date.now()));
   // if everything is sitting out, try the ones that still have requests left anyway
   const order = rested.length ? rested : attempts.filter(usable);
@@ -81,7 +83,7 @@ export async function askForJson({ system, prompt, model = process.env.LLM_MODEL
     } catch (err) {
       last = err;
       if (err.quota) {
-        emptyUntil.set(a.key, nextUtcMidnight());
+        emptyUntil.set(allowance(a), nextUtcMidnight());
         skipped.push(`${a.keyLabel}: out of free requests for today`);
         continue;
       }
@@ -128,7 +130,7 @@ async function askOne({ provider, base, model, system, prompt, apiKey, timeoutMs
       status,
       // 402 is a paid model on an account with no credit; everything here moves on to the next model anyway
       retryable: status === 429 || status === 402 || status >= 500,
-      quota: status === 429 && /per.?day|daily|RPD|free-models-per-day/i.test(message),
+      quota: status === 429 && /per.?day|daily|RPD|free-models-per-day|free_tier_requests/i.test(message),
     });
   }
 

@@ -22,10 +22,10 @@ export function checkPlanShape(plan, { outputFields = [], inputKeys = [], write 
     if (s?.kind === 'navigate' && typeof s.url !== 'string') problems.push(`step ${i + 1} navigate needs a url`);
     if (['fill', 'select', 'check', 'click', 'submit', 'assert'].includes(s?.kind) && !s.selector) problems.push(`step ${i + 1} ${s.kind} needs a selector`);
     if (s?.frame !== undefined && typeof s.frame !== 'string') problems.push(`step ${i + 1} frame must be a css selector`);
-    if (s?.kind === 'fill' || s?.kind === 'select') {
-      for (const ref of String(s.value ?? '').matchAll(/\{\{\s*(\w+)\s*\}\}/g))
+    // values, and selectors such as a radio button's input[value="{{room}}"], may use inputs
+    for (const text of [s?.kind === 'fill' || s?.kind === 'select' ? s.value : '', s?.selector])
+      for (const ref of String(text ?? '').matchAll(/\{\{\s*(?!out\.)(\w+)\s*\}\}/g))
         if (!inputKeys.includes(ref[1])) problems.push(`step ${i + 1} uses unknown input "${ref[1]}"`);
-    }
   });
   if (plan.steps[0]?.kind !== 'navigate') problems.push('first step must be navigate');
   const extracts = plan.steps.filter((s) => s.kind === 'extract');
@@ -58,6 +58,25 @@ const fillIn = (value, inputs, out = {}) =>
   String(value ?? '')
     .replace(/\{\{\s*out\.(\w+)\s*\}\}/g, (_, k) => String(out[k] ?? ''))
     .replace(/\{\{\s*(\w+)\s*\}\}/g, (_, k) => String(inputs[k] ?? ''));
+
+// The page's markup with the body of every iframe written into it, marked with the selector that reaches that
+// frame, so whoever reads it can see a form that lives inside a frame.
+export async function contentWithFrames(page) {
+  let html = await page.content();
+  for (const frame of page.mainFrame().childFrames()) {
+    const selector = await frame
+      .frameElement()
+      .then((el) => el.evaluate((e) => (e.id ? `iframe#${e.id}` : e.getAttribute('name') ? `iframe[name="${e.getAttribute('name')}"]` : e.getAttribute('title') ? `iframe[title="${e.getAttribute('title')}"]` : 'iframe')))
+      .catch(() => null);
+    const inner = selector && (await frame.content().catch(() => ''));
+    if (!inner) continue;
+    const body = inner.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? inner;
+    const at = html.lastIndexOf('</body>');
+    const section = `<section data-anvil-frame='${selector}'>${body}</section>`;
+    html = at >= 0 ? `${html.slice(0, at)}${section}${html.slice(at)}` : html + section;
+  }
+  return html;
+}
 
 // What is about to be sent: every form control's value in every frame, plus the visible text for review
 // pages. Each input counts as found if a control holds exactly it, or failing that the page text shows it.
@@ -125,7 +144,7 @@ export async function runPlan(plan, inputs, session, { baseUrl, onStep = () => {
     if (index < startAt) continue;
     // a step can live inside an iframe; everything else about it stays the same
     const scope = step.frame ? page.frameLocator(step.frame) : page;
-    const at = (selector) => scope.locator(selector).first();
+    const at = (selector) => scope.locator(fillIn(selector, inputs, out)).first();
     const fail = (reason, err) =>
       new StepError(`step ${index + 1} (${step.kind}${step.selector ? ` ${step.selector}` : ''}) failed: ${err?.message?.split('\n')[0] ?? reason}`, {
         index,

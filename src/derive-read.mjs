@@ -198,7 +198,7 @@ function outputFields(derived) {
   return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === 'object' && v ? v.type ?? ex?.fields?.[k]?.type : v]));
 }
 
-function dryRun(derived, page, url) {
+export function dryRun(derived, page, url) {
   const problems = [];
   const fields = (derived.fields = outputFields(derived));
   const names = Object.keys(fields);

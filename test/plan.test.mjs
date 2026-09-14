@@ -31,3 +31,10 @@ test('commit must reach the confirmation', () => {
   assert.match(checkPlanShape({ steps: steps(1) }, { outputFields: ['reference'], write: true }).join(), /still acts on the page/);
   assert.deepEqual(checkPlanShape({ steps: steps(3) }, { outputFields: ['reference'], write: true }), []);
 });
+
+test('selector placeholders are checked', () => {
+  const plan = { steps: [{ kind: 'navigate', url: '/' }, { kind: 'check', selector: 'input[name="space"][value="{{room}}"]' }, { kind: 'check', selector: 'input[value="{{nope}}"]' }, { kind: 'extract', fields: { a: { selector: '#a' } } }] };
+  const problems = checkPlanShape(plan, { inputKeys: ['room'], outputFields: ['a'] });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /unknown input "nope"/);
+});

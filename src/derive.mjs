@@ -6,12 +6,13 @@ A plan is {"steps": [...]} where each step is one of:
   {"kind":"navigate","url":"<absolute url or path>"}
   {"kind":"fill","selector":"<css>","value":"{{inputKey}}"}
   {"kind":"select","selector":"<css of a <select>>","value":"{{inputKey}}"}   (picks the option by value or visible text)
-  {"kind":"check","selector":"<css of a checkbox>"}
+  {"kind":"check","selector":"<css of a checkbox or radio button>"}
   {"kind":"click","selector":"<css>"}
   {"kind":"submit","selector":"<css of the submit control>"}   (clicks and waits for the next page to load)
   {"kind":"assert","selector":"<css that must be visible>"}
   {"kind":"extract","fields":{"<outputField>":{"selector":"<css>","type":"string"|"number"}}}
-Any step may add "frame":"<css of an iframe>" when its element is inside that iframe.
+Any step may add "frame":"<css of an iframe>" when its element is inside that iframe. In the markup you are given, the content
+of an iframe is written inside <section data-anvil-frame='<css of the iframe>'>: steps acting on anything in there need that "frame".
 A click or submit on a page that updates in place (no new page load, typical of JavaScript apps) must add
 "waitFor":"<css of something that appears once it has worked>".
 
@@ -28,6 +29,10 @@ Rules:
   for extract selectors: anchor them to the element that holds the value.
 - Fill values must be {{inputKey}} placeholders using the input keys provided, never literal data. A value read by an
   earlier extract step can be typed later as {{out.<outputField>}} (for example a booking reference into a lookup form).
+  Selectors may use placeholders too, which is how a radio button is chosen from an input: input[name="size"][value="{{inputKey}}"].
+- The one exception to literal data: when the site makes you sign in first and prints a demo account for everyone on that
+  sign-in page, fill in exactly the email and password it prints. Never invent or guess credentials.
+- Never try to get past a captcha or any "are you a robot" check.
 - Extract steps together must produce exactly the output fields listed, with the listed types. A flow may extract
   on several pages; each extract reads the page it runs on.
 - Fields named stored_<x> are what the site itself has on record, read back from its own lookup page after the

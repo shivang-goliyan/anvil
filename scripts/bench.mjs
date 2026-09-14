@@ -5,6 +5,7 @@
 //   cases: comma-separated change kinds (default: every scripted kind, a typed change and 3 surprises).
 //   "check:<kind>" makes the change and then asks Anvil to check the website, instead of booking into it.
 //   "cosmetic" always goes through the check, and has to end with nothing to fix and no model asked.
+//   "read:events-redesign" is the capability that only reads: the events page is redesigned under it.
 //   "needs-person:check" and "needs-person:booking" start from a capability marked as needing a person:
 //   a check that finds the steps still fit clears that, and a failed booking after the cooldown repairs once.
 //
@@ -23,7 +24,7 @@ const flag = (name, fallback) => {
 const repeat = Number(flag('--repeat', 1));
 const jsonOut = flag('--json', null);
 const CUSTOM = { kind: 'custom', field: 'email', label: 'Where should we write?', button: 'Grab my room' };
-const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,wrong-room,new-reference-format,cosmetic,check:rename-field,check:restyle-confirmation,needs-person:check,needs-person:booking,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
+const cases = (args[0] ?? 'rename-field,add-step,reorder-steps,restyle-confirmation,custom,wrong-room,new-reference-format,js-app,iframe,sign-in,redesign,captcha,check:captcha,read:events-redesign,cosmetic,check:rename-field,check:restyle-confirmation,needs-person:check,needs-person:booking,surprise,surprise,surprise').split(',').flatMap((k) => Array(repeat).fill(k));
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const dir = mkdtempSync(`${tmpdir()}/anvil-bench-`);
@@ -83,7 +84,7 @@ async function waitRun(id) {
   for (;;) {
     const { json } = await call('GET', `/api/runs/${id}`);
     if (!['queued', 'running'].includes(json.run.status))
-      return { ...json.run, repairId: json.run.result?.repairId, amended: json.trace.some((e) => e.label.startsWith('check updated')) };
+      return { ...json.run, repairId: json.run.result?.repairId, amended: json.trace.some((e) => e.label.startsWith('check updated')), trace: json.trace };
     await sleep(700);
   }
 }
@@ -116,6 +117,30 @@ for (const kind of cases) {
   const row = { kind, first: '-', broken: '-', repair: '-', tries: 0, seconds: 0, retry: '-', during: '-', after: '-', note: '' };
   results.push(row);
   await call('POST', '/api/target/reset', {});
+  if (kind.startsWith('read:')) {
+    const read = async () => {
+      const q = await call('POST', '/api/runs', { capabilityId: 'harbor-events', inputs: {} });
+      return q.status === 202 ? waitRun(q.json.id) : { status: `refused ${q.status}` };
+    };
+    const first = await read();
+    row.first = first.status;
+    const b = await call('POST', '/api/target/break', { kind: kind.slice(5) });
+    row.note = String(b.json.detail ?? b.json.error ?? '').slice(0, 80);
+    const broken = await read();
+    row.broken = broken.failureKind ? `${broken.status}/${broken.failureKind}` : broken.status;
+    if (broken.repairId) {
+      const r = await waitRepair(broken.repairId);
+      Object.assign(row, { why: r.why, repair: r.outcome, tries: r.tries, seconds: r.seconds, models: r.models });
+    }
+    const after = await read();
+    row.after = after.status;
+    row.records = after.result?.records?.length ?? 0;
+    const ok = row.first === 'succeeded' && row.broken === 'failed/structural' && row.repair === 'repaired' && row.after === 'succeeded' && row.records === first.result?.records?.length;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(26)} first ${row.first.padEnd(9)} changed ${String(row.broken).padEnd(17)} repair ${String(row.repair).padEnd(9)} tries ${row.tries} ${String(row.seconds).padStart(3)}s  after ${row.after} with ${row.records} records (first run had ${first.result?.records?.length ?? 0})  ${row.note}`);
+    row.pass = ok;
+    if (!ok && row.why?.length) console.log(row.why.join('\n'));
+    continue;
+  }
   row.first = (await book()).status;
   if (kind.startsWith('needs-person:')) {
     // as if its last repair had given up: the cooldown is measured from the last repair, and here there is none
@@ -168,6 +193,8 @@ for (const kind of cases) {
     row.bookings = await bookings();
     let ok = row.first === 'succeeded' && row.during === 0 && row.retry === '-' && row.after === 'succeeded';
     if (kind === 'cosmetic') ok &&= row.repair === 'not-needed' && row.fit === 'fits' && row.models.length === 0 && row.tries === 0;
+    // a captcha is refused, not repaired, and nothing after it can book
+    else if (kind === 'check:captcha') ok = row.first === 'succeeded' && row.during === 0 && row.fit === 'blocked' && row.models.length === 0 && (await status()) === 'degraded';
     else ok &&= row.repair === 'repaired' && row.fit === 'stale';
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${kind.padEnd(26)} first ${row.first.padEnd(9)} ${String(row.broken).padEnd(8)} fit ${String(row.fit).padEnd(6)} repair ${String(row.repair).padEnd(10)} models asked ${row.models?.length ?? '-'} tries ${row.tries} ${String(row.seconds).padStart(3)}s  booked-while-checking ${row.during}  after ${row.after}  ${row.note}`);
     row.pass = ok;
@@ -191,6 +218,7 @@ for (const kind of cases) {
   let ok = row.first === 'succeeded';
   // the site booked the wrong room: caught, and not "repaired" into looking fine
   if (kind === 'wrong-room') ok &&= row.broken === 'failed/mismatch' && row.repair === '-';
+  else if (kind === 'captcha') ok &&= row.broken === 'failed/blocked' && row.repair === '-' && row.bookings === 1 && (await status()) === 'degraded';
   else if (kind === 'new-reference-format') ok &&= row.broken === 'succeeded' && row.amended && row.after === 'succeeded';
   // a repair may not book anything itself, and the one retry booking has to go through
   else ok &&= row.repair === 'repaired' && row.during === 0 && ['succeeded', '-'].includes(row.retry) && row.after === 'succeeded';

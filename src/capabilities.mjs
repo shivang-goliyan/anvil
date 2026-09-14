@@ -81,7 +81,7 @@ export async function seedCapability(def, { reset = false } = {}) {
     await db.capability.delete({ where: { id: def.id } });
   }
   await db.capability.create({
-    data: { id: def.id, name: def.name, goal: def.goal, targetUrl: def.targetUrl, inputSchema: def.inputSchema, canary: def.canary },
+    data: { id: def.id, name: def.name, goal: def.goal, targetUrl: def.targetUrl, inputSchema: def.inputSchema, canary: def.canary, engine: def.engine ?? 'browser' },
   });
   const plan = await db.plan.create({ data: { capabilityId: def.id, steps: def.steps, origin: 'hand-written', version: 1, active: true } });
   await db.capability.update({ where: { id: def.id }, data: { planId: plan.id } });

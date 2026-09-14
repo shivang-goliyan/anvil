@@ -182,12 +182,23 @@ export async function openBrowser({ origin, forward, log } = {}) {
       const path = req.url().slice(origin.length) || '/';
       let res;
       try {
-        res = await fetch(`${forward}${path}`, {
-          method: req.method(),
-          headers: { 'content-type': req.headers()['content-type'] ?? 'text/plain' },
-          body: ['GET', 'HEAD'].includes(req.method()) ? undefined : req.postData() ?? '',
-          redirect: 'manual',
-        });
+        const sent = await req.allHeaders();
+        const get = ['GET', 'HEAD'].includes(req.method());
+        let at = path;
+        for (let hops = 0; ; hops++) {
+          res = await fetch(`${forward}${at}`, {
+            method: req.method(),
+            headers: { 'content-type': sent['content-type'] ?? 'text/plain', ...(sent.cookie && { cookie: sent.cookie }) },
+            body: get ? undefined : req.postData() ?? '',
+            redirect: 'manual',
+          });
+          // Chrome does not send the second leg of a redirected page load back through this route, and the
+          // made-up origin does not resolve, so a GET redirect is followed here (seen with a sign-in redirect).
+          // A redirect after a POST does come back through the route, so it is handed to the browser as it is.
+          const next = res.headers.get('location');
+          if (!get || res.status < 300 || res.status > 399 || !next?.startsWith('/') || hops === 5) break;
+          at = next;
+        }
       } catch {
         return route.abort('connectionrefused');
       }

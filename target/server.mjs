@@ -1,18 +1,23 @@
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { freshConfig, applyBreak, describe, BREAKS, ROOMS } from './config.mjs';
+import { freshConfig, applyBreak, describe, BREAKS, ROOMS, SLOTS, DEMO_ACCOUNT, WIZARD, EVENTS } from './config.mjs';
 
 const port = Number(process.env.TARGET_PORT ?? 4310);
 const adminToken = process.env.TARGET_ADMIN_TOKEN ?? '';
+const APP_JS = readFileSync(new URL('./booking-app.js', import.meta.url), 'utf8');
 
 let config = freshConfig();
 const reservations = new Map();
 // half-finished bookings for the multi-page flows, keyed by a token in a hidden field
 const pending = new Map();
+// browsers that signed in with the demo account, and captcha answers by token
+const sessions = new Set();
+const captchas = new Map();
 
+const HALF_HOUR = 30 * 60 * 1000;
 function hold(values) {
-  const cutoff = Date.now() - 30 * 60 * 1000;
-  for (const [t, p] of pending) if (p.at < cutoff) pending.delete(t);
+  for (const [t, p] of pending) if (p.at < Date.now() - HALF_HOUR) pending.delete(t);
   const token = randomBytes(8).toString('hex');
   pending.set(token, { values, at: Date.now() });
   return token;
@@ -21,7 +26,7 @@ function hold(values) {
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
-function layout(title, body) {
+function layout(title, body, { bare = false } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -29,12 +34,12 @@ function layout(title, body) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} · ${esc(config.org)}</title>
 <style>
-  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: ${config.colors.paper}; color: #1d1d1b; }
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: ${bare ? '#fff' : config.colors.paper}; color: #1d1d1b; }
   .site-header, .site-footer { padding: 14px 24px; background: ${config.colors.ink}; color: #f6f4ef; }
   .banner { margin: 0; padding: 10px 24px; background: #efe3fb; color: #3d1d5c; font-size: 14px; }
   .site-header a { color: inherit; text-decoration: none; font-weight: 600; }
   .site-footer { font-size: 13px; background: #e7e2d6; color: #555; }
-  main { max-width: 520px; margin: 32px auto; padding: 0 24px; }
+  main { max-width: 520px; margin: ${bare ? '8px' : '32px'} auto; padding: 0 24px; }
   label { display: block; margin-top: 16px; font-weight: 500; }
   .steps { color: #555; font-size: 14px; }
   .receipt { background: #fff; border: 1px solid #d8d2c4; padding: 8px 18px; }
@@ -42,26 +47,66 @@ function layout(title, body) {
   .receipt-row:last-child { border-bottom: 0; }
   .receipt-row .k { color: #555; }
   input, select { width: 100%; padding: 8px; font: inherit; box-sizing: border-box; }
+  input[type="radio"] { width: auto; }
   .site-header nav { float: right; font-size: 14px; }
   .site-header nav a { font-weight: 500; }
   button { margin-top: 24px; padding: 10px 18px; font: inherit; background: ${config.colors.ink}; color: #fff; border: 0; }
   .error { color: #a3261f; font-size: 14px; }
   dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
   dt { color: #555; }
+  .captcha { margin-top: 20px; padding: 12px; background: #fff7e6; border: 1px solid #e8c77a; }
+  .demo-account { margin: 16px 0; padding: 12px 16px; background: #fff; border-left: 4px solid ${config.colors.ink}; }
+  .wizard-steps { display: flex; gap: 18px; padding: 0; list-style: none; color: #777; font-size: 14px; }
+  .wizard-steps [aria-current] { color: #1d1d1b; font-weight: 700; }
+  fieldset { margin-top: 16px; border: 1px solid #d8d2c4; }
+  .choice { display: inline-flex; gap: 6px; margin: 6px 14px 0 0; font-weight: 400; }
+  .ticket { background: #fff; border-radius: 14px; padding: 18px 22px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+  .ticket-code { font: 700 26px/1.2 ui-monospace, monospace; margin: 0 0 12px; }
+  .ticket-lines { list-style: none; padding: 0; margin: 0; }
+  .ticket-lines li { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid #eee; }
 </style>
 </head>
 <body>
-<header class="site-header"><a href="/">${esc(config.org)}</a><nav><a href="/find">Find my booking</a></nav></header>
-${config.banner ? `<p class="banner">${esc(config.banner)}</p>` : ''}
+${bare ? '' : `<header class="site-header"><a href="/">${esc(config.org)}</a><nav><a href="/events">Events</a> · <a href="/find">Find my booking</a></nav></header>`}
+${!bare && config.banner ? `<p class="banner">${esc(config.banner)}</p>` : ''}
 ${body}
-<footer class="site-footer">Demo target for Anvil. This site is owned by the project so it can be broken on purpose.</footer>
+${bare ? '' : '<footer class="site-footer">Demo target for Anvil. This site is owned by the project so it can be broken on purpose.</footer>'}
 </body>
 </html>`;
 }
 
 const byKey = (key) => config.fields.find((f) => f.key === key);
 
-function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.key), id = config.formId, action = '/reserve', button = config.submitLabel, token = null, step = null } = {}) {
+// "Are you a robot?": a fresh set of letters every time the page is drawn, in a picture Anvil is never meant to read
+function captchaBlock() {
+  if (!config.captcha) return '';
+  for (const [t, c] of captchas) if (c.at < Date.now() - HALF_HOUR) captchas.delete(t);
+  const token = randomBytes(8).toString('hex');
+  const answer = Array.from(randomBytes(5), (b) => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+  captchas.set(token, { answer, at: Date.now() });
+  const letters = [...answer].map((ch, i) => `<text x="${16 + i * 26}" y="${31 + ((i * 7) % 9)}" transform="rotate(${(i % 2 ? 1 : -1) * (9 + i * 3)} ${16 + i * 26} 28)">${ch}</text>`).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="48"><rect width="150" height="48" fill="#eee"/><path d="M0 30 C40 5 90 45 150 18" stroke="#888" fill="none"/><g font-family="monospace" font-size="24" fill="#333">${letters}</g></svg>`;
+  return `<div class="captcha">
+  <p>Before we book anything: are you a robot? Type the letters in the picture.</p>
+  <img alt="captcha" width="150" height="48" src="data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}">
+  <input name="captcha" aria-label="Letters in the picture" autocomplete="off" required>
+  <input type="hidden" name="captcha_t" value="${token}">
+</div>`;
+}
+
+function captchaPassed(get) {
+  if (!config.captcha) return true;
+  const token = String(get('captcha_t') ?? '');
+  const c = captchas.get(token);
+  captchas.delete(token);
+  return !!c && c.answer === String(get('captcha') ?? '').trim().toUpperCase();
+}
+const CAPTCHA_WRONG = 'The captcha was not right. Are you a robot? Type the letters in the picture to book.';
+
+const cookie = (req, name) => (req.headers.cookie ?? '').split(/;\s*/).map((p) => p.split('=')).find(([k]) => k === name)?.[1];
+const signedIn = (req) => !config.signIn || sessions.has(cookie(req, 'hl_session'));
+
+function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.key), id = config.formId, action = '/reserve', button = config.submitLabel, token = null, step = null, bare = false } = {}) {
   const inputs = keys
     .map(byKey)
     .map((f) => {
@@ -77,33 +122,50 @@ function formPage(values = {}, errors = {}, { keys = config.fields.map((f) => f.
   ${errors[f.name] ? `<p class="error" data-error-for="${esc(f.name)}">${esc(errors[f.name])}</p>` : ''}`;
     })
     .join('\n');
+  // the page whose button books is the one that carries the captcha
+  const books = action === '/reserve' && !config.reviewStep;
 
+  return layout(
+    config.title,
+    `<main>
+${bare ? '' : `<h1>${esc(config.title)}</h1>\n<p>${esc(config.intro)}</p>`}
+${step ? `<p class="steps">${esc(step)}</p>` : ''}
+${errors._captcha ? `<p class="error" role="alert">${esc(errors._captcha)}</p>` : Object.keys(errors).length ? '<p class="error" role="alert">Please fix the highlighted fields.</p>' : ''}
+<form id="${id}" method="post" action="${action}"${bare ? ' target="_top"' : ''} novalidate>
+${token ? `  <input type="hidden" name="t" value="${esc(token)}">\n` : ''}${inputs}
+${books ? captchaBlock() : ''}
+  <button type="submit">${esc(button)}</button>
+</form>
+</main>`,
+    { bare },
+  );
+}
+
+// the iframe change: the page around the form stays, the form itself is loaded into a frame
+function framedPage() {
   return layout(
     config.title,
     `<main>
 <h1>${esc(config.title)}</h1>
 <p>${esc(config.intro)}</p>
-${step ? `<p class="steps">${esc(step)}</p>` : ''}
-${Object.keys(errors).length ? '<p class="error" role="alert">Please fix the highlighted fields.</p>' : ''}
-<form id="${id}" method="post" action="${action}" novalidate>
-${token ? `  <input type="hidden" name="t" value="${esc(token)}">\n` : ''}${inputs}
-  <button type="submit">${esc(button)}</button>
-</form>
+<iframe id="booking-frame" title="Booking form" src="/embed/reserve" style="width:100%;height:${config.seatsFirst ? 300 : 760}px;border:1px solid #d8d2c4;background:#fff"></iframe>
 </main>`,
   );
 }
 
-function reviewPage(values, token) {
+function reviewPage(values, token, error) {
   return layout(
     'Check your details',
     `<main>
 <h1>Check your details</h1>
 <p>Nothing is booked until you confirm.</p>
+${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
 <dl>
 ${config.fields.map((f) => `  <dt>${esc(f.label)}</dt><dd>${esc(values[f.key])}</dd>`).join('\n')}
 </dl>
 <form id="confirm-form" method="post" action="/reserve/confirm">
   <input type="hidden" name="t" value="${esc(token)}">
+${captchaBlock()}
   <button type="submit">Confirm reservation</button>
 </form>
 </main>`,
@@ -111,6 +173,26 @@ ${config.fields.map((f) => `  <dt>${esc(f.label)}</dt><dd>${esc(values[f.key])}<
 }
 
 function confirmationPage(r) {
+  if (config.redesign)
+    return layout(
+      'All set',
+      `<main class="ticket-page">
+<h1>All set</h1>
+<section class="ticket">
+  <p class="ticket-label">Booking code</p>
+  <p class="ticket-code" data-code>${esc(r.reference)}</p>
+  <ul class="ticket-lines">
+    <li><span>Guest</span><b data-line="guest">${esc(r.name)}</b></li>
+    <li><span>Contact</span><b data-line="contact">${esc(r.email)}</b></li>
+    <li><span>Group</span><b data-line="party">${esc(r.seats)}</b></li>
+    <li><span>Space</span><b data-line="space">${esc(r.shownRoom)}</b></li>
+    <li><span>Day</span><b data-line="day">${esc(r.date)}</b></li>
+    <li><span>Arrival</span><b data-line="arrival">${esc(r.time)}</b></li>
+  </ul>
+</section>
+<p><a href="/find">Look this booking up later</a></p>
+</main>`,
+    );
   if (config.receiptLayout)
     return layout(
       'Reservation confirmed',
@@ -143,6 +225,109 @@ function confirmationPage(r) {
 </dl>
 <p><a href="/find">Find this booking later</a></p>
 <p><a href="/">Make another reservation</a></p>
+</main>`,
+  );
+}
+
+// the JavaScript app change: an empty shell and a script that draws everything
+function appShell() {
+  const boot = {
+    salt: config.appSalt,
+    title: config.title,
+    intro: config.intro,
+    submitLabel: config.submitLabel,
+    fields: config.fields.map(({ key, label, type, options }) => ({ key, label, type, options })),
+    captcha: captchaBlock() || null,
+  };
+  return layout(
+    config.title,
+    `<main><div id="app-root"><p>Loading the booking app…</p></div></main>
+<script type="application/json" id="boot">${JSON.stringify(boot).replace(/</g, '\\u003c')}</script>
+<script>${APP_JS}</script>`,
+  );
+}
+
+function signInPage(next, error) {
+  return layout(
+    'Sign in',
+    `<main>
+<h1>Sign in to book a room</h1>
+<p>Rooms can only be booked by signed-in patrons.</p>
+<aside class="demo-account">
+  <p><b>Demo account, for everyone trying this site:</b></p>
+  <p>Email <code>${esc(DEMO_ACCOUNT.email)}</code><br>Password <code>${esc(DEMO_ACCOUNT.password)}</code></p>
+</aside>
+${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
+<form id="sign-in-form" method="post" action="/sign-in">
+  <input type="hidden" name="next" value="${esc(next)}">
+  <label for="login-email">Email</label>
+  <input id="login-email" name="login_email" type="email" required>
+  <label for="login-password">Password</label>
+  <input id="login-password" name="password" type="password" required>
+  <button type="submit">Sign in</button>
+</form>
+</main>`,
+  );
+}
+
+// the full redesign: three steps, radio buttons, every box renamed
+function wizardPage(n, title, inner, { action, button, token, error }) {
+  return layout(
+    title,
+    `<main class="wizard">
+<ol class="wizard-steps">${['When', 'Who', 'Check'].map((s, i) => `<li${i + 1 === n ? ' aria-current="step"' : ''}>${s}</li>`).join('')}</ol>
+<h1>${esc(title)}</h1>
+${error ? `<p class="error" role="alert">${esc(error)}</p>` : ''}
+<form class="wizard-form" id="wiz-${n}" method="post" action="${action}" novalidate>
+${token ? `<input type="hidden" name="t" value="${esc(token)}">` : ''}
+${inner}
+<button type="submit">${esc(button)}</button>
+</form>
+</main>`,
+  );
+}
+const radios = (name, options) => options.map((o) => `<label class="choice"><input type="radio" name="${name}" value="${esc(o)}"> ${esc(o)}</label>`).join('');
+const wizardWhen = (error) =>
+  wizardPage(1, 'When would you like to come?', `<fieldset><legend>${WIZARD.room.label}</legend>${radios(WIZARD.room.name, ROOMS)}</fieldset>
+<label for="${WIZARD.date.name}">${WIZARD.date.label}</label><input id="${WIZARD.date.name}" name="${WIZARD.date.name}" type="date" required>
+<fieldset><legend>${WIZARD.time.label}</legend>${radios(WIZARD.time.name, SLOTS)}</fieldset>`, { action: '/visit/when', button: 'Next: who is coming', error });
+const wizardWho = (token, error) =>
+  wizardPage(2, 'Who is coming?', ['name', 'email', 'seats'].map((k) => `<label for="${WIZARD[k].name}">${WIZARD[k].label}</label><input id="${WIZARD[k].name}" name="${WIZARD[k].name}" type="${k === 'email' ? 'email' : k === 'seats' ? 'number' : 'text'}" required>`).join('\n'), {
+    action: '/visit/who',
+    button: 'Next: check it',
+    token,
+    error,
+  });
+const wizardCheck = (values, token, error) =>
+  wizardPage(3, 'Check and book', `<ul class="check-list">${['room', 'date', 'time', 'name', 'email', 'seats'].map((k) => `<li>${WIZARD[k].label} <b>${esc(values[k])}</b></li>`).join('')}</ul>
+${captchaBlock()}`, { action: '/visit/book', button: 'Book this room', token, error });
+
+// What the read-only capability reads. The redesign turns the cards into a table and renames everything.
+function eventsPage() {
+  if (config.eventsLayout === 'table')
+    return layout(
+      "What's on",
+      `<main>
+<h1>What's on at the library</h1>
+<table class="agenda">
+  <thead><tr><th>Event</th><th>Day</th><th>Starts</th><th>Where</th><th>Places free</th></tr></thead>
+  <tbody>
+${EVENTS.map((e) => `    <tr class="agenda-row"><td data-col="name">${esc(e.title)}</td><td data-col="day">${esc(e.date)}</td><td data-col="start">${esc(e.time)}</td><td data-col="place">${esc(e.room)}</td><td data-col="free">${e.seats}</td></tr>`).join('\n')}
+  </tbody>
+</table>
+</main>`,
+    );
+  return layout(
+    'Upcoming events',
+    `<main>
+<h1>Upcoming events</h1>
+<ul class="events">
+${EVENTS.map((e) => `  <li class="event">
+    <h3 class="event-title">${esc(e.title)}</h3>
+    <p><span class="event-date">${esc(e.date)}</span> at <span class="event-time">${esc(e.time)}</span>, <span class="event-room">${esc(e.room)}</span></p>
+    <p><span class="seats-left">${e.seats}</span> seats left</p>
+  </li>`).join('\n')}
+</ul>
 </main>`,
   );
 }
@@ -208,6 +393,26 @@ function validate(body, keys = config.fields.map((f) => f.key)) {
   return { errors, clean };
 }
 
+// the wizard's boxes carry other names, so its steps are checked against the same rules under those names
+function validateWizard(body, keys) {
+  const renamed = new URLSearchParams();
+  for (const k of keys) renamed.set(byKey(k).name, body.get(WIZARD[k].name) ?? '');
+  const { errors, clean } = validate(renamed, keys);
+  return { error: Object.values(errors)[0] ?? null, clean };
+}
+
+function makeBooking(values) {
+  const reference =
+    config.referenceStyle === 'BK'
+      ? `BK-2026-${String(1000 + (randomBytes(2).readUInt16BE() % 9000))}-${String(randomBytes(1)[0] % 100).padStart(2, '0')}`
+      : `HL-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
+  // the wrong-room trap stores another room but keeps showing the one that was asked for
+  const room = config.wrongRoom ? ROOMS.find((r) => r !== values.room) : values.room;
+  const record = { reference, ...values, room, shownRoom: values.room };
+  reservations.set(reference, record);
+  return record;
+}
+
 function send(res, status, html, headers = {}) {
   res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', ...headers });
   res.end(html);
@@ -235,23 +440,101 @@ async function readBody(req) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+// pages that belong to booking, which the sign-in change puts behind the demo account
+const BOOKING = /^\/($|reserve(\/|$)|embed\/|visit\/|api\/reserve$)/;
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
-    const seatsPage = (values, errors) => formPage(values, errors, { keys: ['seats'], id: 'party-form', action: '/reserve/seats', button: 'Continue', step: 'Step 1 of 2' });
+    const seatsPage = (values, errors, bare) => formPage(values, errors, { keys: ['seats'], id: 'party-form', action: '/reserve/seats', button: 'Continue', step: 'Step 1 of 2', bare });
     const detailsPage = (values, errors, token) => formPage(values, errors, { keys: config.fields.map((f) => f.key).filter((k) => k !== 'seats'), token, step: 'Step 2 of 2' });
-    const book = (values) => {
-      const reference =
-        config.referenceStyle === 'BK'
-          ? `BK-2026-${String(1000 + (randomBytes(2).readUInt16BE() % 9000))}-${String(randomBytes(1)[0] % 100).padStart(2, '0')}`
-          : `HL-${randomBytes(4).toString('hex').toUpperCase().slice(0, 6)}`;
-      // the wrong-room trap stores another room but keeps showing the one that was asked for
-      const room = config.wrongRoom ? ROOMS.find((r) => r !== values.room) : values.room;
-      reservations.set(reference, { reference, ...values, room, shownRoom: values.room });
-      return send(res, 303, '', { location: `/reservations/${reference}` });
-    };
+    const book = (values) => send(res, 303, '', { location: `/reservations/${makeBooking(values).reference}` });
 
-    if (req.method === 'GET' && url.pathname === '/') return send(res, 200, config.seatsFirst ? seatsPage() : formPage());
+    if (config.signIn && BOOKING.test(url.pathname) && !signedIn(req)) {
+      if (url.pathname.startsWith('/api/')) return sendJson(res, 401, { error: 'sign in first' });
+      return send(res, 303, '', { location: `/sign-in?next=${encodeURIComponent(req.method === 'GET' ? url.pathname : '/')}` });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/sign-in') {
+      if (!config.signIn) return send(res, 303, '', { location: '/' });
+      return send(res, 200, signInPage(url.searchParams.get('next') ?? '/'));
+    }
+    if (req.method === 'POST' && url.pathname === '/sign-in') {
+      const body = new URLSearchParams(await readBody(req));
+      const next = /^\/(?!\/)/.test(body.get('next') ?? '') ? body.get('next') : '/';
+      if (body.get('login_email')?.trim().toLowerCase() !== DEMO_ACCOUNT.email || body.get('password') !== DEMO_ACCOUNT.password) return send(res, 401, signInPage(next, 'That email and password do not match.'));
+      const token = randomBytes(12).toString('hex');
+      sessions.add(token);
+      return send(res, 303, '', { location: next, 'set-cookie': `hl_session=${token}; Path=/; HttpOnly; SameSite=Lax` });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/') {
+      if (config.jsApp) return send(res, 200, appShell());
+      if (config.redesign) return send(res, 200, wizardWhen());
+      if (config.iframe) return send(res, 200, framedPage());
+      return send(res, 200, config.seatsFirst ? seatsPage() : formPage());
+    }
+
+    if (req.method === 'GET' && url.pathname === '/embed/reserve') {
+      if (!config.iframe) return send(res, 303, '', { location: '/' });
+      return send(res, 200, config.seatsFirst ? seatsPage({}, {}, true) : formPage({}, {}, { bare: true }));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/reserve') {
+      if (!config.jsApp) return sendJson(res, 404, { error: 'nothing here' });
+      let json;
+      try {
+        json = JSON.parse(await readBody(req));
+      } catch {
+        return sendJson(res, 400, { error: 'That did not arrive in one piece, try again.' });
+      }
+      if (!captchaPassed((k) => json[k])) return sendJson(res, 422, { error: CAPTCHA_WRONG, captcha: captchaBlock() });
+      const body = new URLSearchParams();
+      for (const f of config.fields) body.set(f.name, String(json[f.key] ?? ''));
+      const { errors, clean } = validate(body);
+      if (Object.keys(errors).length) return sendJson(res, 422, { error: Object.values(errors).join(' '), captcha: captchaBlock() || null });
+      const r = makeBooking(clean);
+      return sendJson(res, 200, { reference: r.reference, name: r.name, email: r.email, seats: r.seats, room: r.shownRoom, date: r.date, time: r.time });
+    }
+    const apiRecord = url.pathname.match(/^\/api\/reservations\/((?:HL|BK)-[A-Z0-9-]{6,12})$/);
+    if (req.method === 'GET' && apiRecord) {
+      const r = reservations.get(apiRecord[1]);
+      return r ? sendJson(res, 200, { reference: r.reference, name: r.name, email: r.email, seats: r.seats, room: r.shownRoom, date: r.date, time: r.time }) : sendJson(res, 404, { error: 'no such reservation' });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/visit/when') {
+      const body = new URLSearchParams(await readBody(req));
+      const { error, clean } = validateWizard(body, ['room', 'date', 'time']);
+      if (error) return send(res, 422, wizardWhen(error));
+      return send(res, 303, '', { location: `/visit/who?t=${hold(clean)}` });
+    }
+    if (req.method === 'GET' && url.pathname === '/visit/who') {
+      const token = url.searchParams.get('t');
+      return pending.has(token) ? send(res, 200, wizardWho(token)) : send(res, 303, '', { location: '/' });
+    }
+    if (req.method === 'POST' && url.pathname === '/visit/who') {
+      const body = new URLSearchParams(await readBody(req));
+      const token = body.get('t');
+      const held = pending.get(token);
+      if (!held) return send(res, 303, '', { location: '/' });
+      const { error, clean } = validateWizard(body, ['name', 'email', 'seats']);
+      if (error) return send(res, 422, wizardWho(token, error));
+      pending.delete(token);
+      return send(res, 303, '', { location: `/visit/check?t=${hold({ ...held.values, ...clean })}` });
+    }
+    if (req.method === 'GET' && url.pathname === '/visit/check') {
+      const held = pending.get(url.searchParams.get('t'));
+      return held ? send(res, 200, wizardCheck(held.values, url.searchParams.get('t'))) : send(res, 303, '', { location: '/' });
+    }
+    if (req.method === 'POST' && url.pathname === '/visit/book') {
+      const body = new URLSearchParams(await readBody(req));
+      const token = body.get('t');
+      const held = pending.get(token);
+      if (!held) return send(res, 303, '', { location: '/' });
+      if (!captchaPassed((k) => body.get(k))) return send(res, 422, wizardCheck(held.values, token, CAPTCHA_WRONG));
+      pending.delete(token);
+      return book(held.values);
+    }
 
     if (req.method === 'POST' && url.pathname === '/reserve/seats') {
       const body = new URLSearchParams(await readBody(req));
@@ -273,7 +556,9 @@ const server = createServer(async (req, res) => {
       if (!earlier) return send(res, 303, '', { location: '/' });
       const keys = config.fields.map((f) => f.key).filter((k) => !config.seatsFirst || k !== 'seats');
       const { errors, clean } = validate(body, keys);
-      if (Object.keys(errors).length) return send(res, 422, config.seatsFirst ? detailsPage(Object.fromEntries(body), errors, token) : formPage(Object.fromEntries(body), errors));
+      const again = (errs) => send(res, 422, config.seatsFirst ? detailsPage(Object.fromEntries(body), errs, token) : formPage(Object.fromEntries(body), errs));
+      if (!config.reviewStep && !captchaPassed((k) => body.get(k))) return again({ ...errors, _captcha: CAPTCHA_WRONG });
+      if (Object.keys(errors).length) return again(errors);
       if (config.seatsFirst) pending.delete(token);
       const values = { ...earlier, ...clean };
       if (config.reviewStep) return send(res, 303, '', { location: `/reserve/review?t=${hold(values)}` });
@@ -287,14 +572,17 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/reserve/confirm') {
-      const token = new URLSearchParams(await readBody(req)).get('t');
+      const body = new URLSearchParams(await readBody(req));
+      const token = body.get('t');
       const held = pending.get(token);
       if (!held) return send(res, 303, '', { location: '/' });
+      if (!captchaPassed((k) => body.get(k))) return send(res, 422, reviewPage(held.values, token, CAPTCHA_WRONG));
       pending.delete(token);
       return book(held.values);
     }
 
     if (req.method === 'GET' && url.pathname === '/find') return send(res, 200, findPage());
+    if (req.method === 'GET' && url.pathname === '/events') return send(res, 200, eventsPage());
     if (req.method === 'POST' && url.pathname === '/find') {
       const body = new URLSearchParams(await readBody(req));
       const r = reservations.get((body.get('reference') ?? '').trim());
@@ -305,7 +593,8 @@ const server = createServer(async (req, res) => {
     const match = url.pathname.match(/^\/reservations\/((?:HL|BK)-[A-Z0-9-]{6,12})$/);
     if (req.method === 'GET' && match) {
       const r = reservations.get(match[1]);
-      return r ? send(res, 200, confirmationPage(r)) : send(res, 404, layout('Not found', '<main><h1>No such reservation</h1></main>'));
+      if (!r) return send(res, 404, layout('Not found', '<main><h1>No such reservation</h1></main>'));
+      return send(res, 200, config.jsApp ? appShell() : confirmationPage(r));
     }
 
     if (url.pathname.startsWith('/_admin/')) {
@@ -316,6 +605,8 @@ const server = createServer(async (req, res) => {
         config = freshConfig();
         pending.clear();
         reservations.clear();
+        sessions.clear();
+        captchas.clear();
         return sendJson(res, 200, { ok: true, config, described: describe(config) });
       }
       if (req.method === 'POST' && url.pathname === '/_admin/break') {

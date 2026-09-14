@@ -1,8 +1,8 @@
 import { openBrowser } from './anakin.mjs';
-import { runPlan, StepError } from './plan.mjs';
+import { runPlan, StepError, contentWithFrames } from './plan.mjs';
 import { checkContract } from './contract.mjs';
 import { pageShape, diffShapes, compactHtml } from './page-shape.mjs';
-import { triage } from './triage.mjs';
+import { triage, BLOCK_WORDS } from './triage.mjs';
 import { OverBudget } from './errors.mjs';
 import { db } from './db.mjs';
 import { sessionOptions, booksSomething } from './capabilities.mjs';
@@ -35,7 +35,7 @@ export async function fitCheck(cap, log) {
   const session = await openBrowser({ ...sessionOptions(cap), log });
   const snap = shooter(session, log);
   const page = session.page;
-  const pageHtml = () => session.within(5000, page.content(), 'reading the page').catch(() => '');
+  const pageHtml = () => session.within(5000, contentWithFrames(page), 'reading the page').catch(() => '');
   const pageText = () => session.within(5000, page.innerText('body'), 'reading the page text').catch(() => '');
   let changes = [];
 
@@ -64,6 +64,7 @@ export async function fitCheck(cap, log) {
     } catch (err) {
       return await stop(`the first page did not load: ${err.message.split('\n')[0]}`, new StepError(err.message, { index: 0, reason: 'navigation', url: entry, docStatus: session.docStatus() }));
     }
+    await page.waitForLoadState('load', { timeout: 8000 }).catch(() => {});
     const now = pageShape(await pageHtml());
     changes = diffShapes(cap.snapshot?.shape, now.shape);
     for (const c of changes) log('diff', c);
@@ -115,6 +116,9 @@ export async function fitCheck(cap, log) {
       });
       await snap('page right before the booking button, which was not pressed', { index: result.commitIndex, fit: true });
       if (missing.length) return await stop(`rehearsed up to the booking button, but the page did not hold ${missing.join(', ')}`);
+      // a captcha next to the booking button passes every check above and still stops every real booking
+      const words = (await pageText()).match(BLOCK_WORDS)?.[0];
+      if (words) return await stop(`the page with the booking button asks "${words}"`, new StepError(`the booking page asks "${words}"`, { index: result.commitIndex, reason: 'blocked', url: page.url(), docStatus: session.docStatus() }));
 
       // 3. the steps after the booking button, on a booking that already exists
       const last = await db.run.findFirst({ where: { capabilityId: cap.id, status: 'succeeded' }, orderBy: { createdAt: 'desc' }, select: { inputs: true, result: true } });

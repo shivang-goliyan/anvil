@@ -31,7 +31,9 @@ export function pageShape(html) {
   }));
 
   const headings = root.querySelectorAll('h1, h2').map(text).filter(Boolean);
-  const shape = { title: text(root.querySelector('title')), headings, forms };
+  const frames = root.querySelectorAll('iframe').map((f) => f.getAttribute('id') ?? f.getAttribute('src') ?? 'iframe');
+  // only present when there are frames, so pages without any keep the hash they always had
+  const shape = { title: text(root.querySelector('title')), headings, forms, ...(frames.length && { frames }) };
   return { shape, hash: createHash('sha256').update(JSON.stringify(shape)).digest('hex').slice(0, 16) };
 }
 
@@ -39,13 +41,20 @@ export function pageShape(html) {
 export function formMarkup(html, limit = 6000) {
   const root = parse(html);
   const forms = root.querySelectorAll('form');
-  const chunk = forms.length ? forms.map((f) => f.outerHTML).join('\n') : (root.querySelector('main') ?? root).outerHTML;
+  const chunk = forms.length
+    ? forms
+        .map((f) => {
+          const frame = f.closest('[data-anvil-frame]')?.getAttribute('data-anvil-frame');
+          return `${frame ? `<!-- this form is inside ${frame}: its steps need "frame": "${frame}" -->\n` : ''}${f.outerHTML}`;
+        })
+        .join('\n')
+    : (root.querySelector('main') ?? root).outerHTML;
   return chunk.replace(/\s{2,}/g, ' ').slice(0, limit);
 }
 
-const KEEP_ATTRS = new Set(['id', 'class', 'href', 'title', 'alt', 'itemprop', 'role', 'aria-label', 'datetime', 'name', 'type', 'placeholder', 'for', 'action']);
+const KEEP_ATTRS = new Set(['id', 'class', 'href', 'src', 'title', 'alt', 'itemprop', 'role', 'aria-label', 'datetime', 'name', 'type', 'placeholder', 'for', 'action', 'value', 'target']);
 const LIST_AT = 8;
-const DROP_TAGS = 'script, style, noscript, svg, iframe, link, meta, template, head';
+const DROP_TAGS = 'script, style, noscript, svg, link, meta, template, head';
 
 // The body with scripts, styles and most attributes gone, long text clipped, and long runs of
 // look-alike siblings cut to three. Enough for a model to write selectors against.
@@ -60,7 +69,7 @@ export function compactHtml(html, limit = 24000) {
         // data-* hooks are often the most stable selector on a page, when they are short labels and not blobs
         const hook = /^data-[\w-]+$/i.test(name) && String(el.getAttribute(name)).length <= 40;
         if (!KEEP_ATTRS.has(name.toLowerCase()) && !hook) el.removeAttribute(name);
-        else if (name === 'href' && el.getAttribute('href').length > 80) el.setAttribute('href', `${el.getAttribute('href').slice(0, 80)}…`);
+        else if ((name === 'href' || name === 'src') && el.getAttribute(name).length > 80) el.setAttribute(name, `${el.getAttribute(name).slice(0, 80)}…`);
       }
     }
     const kids = (el.childNodes ?? []).filter((n) => n.nodeType === 1);
@@ -96,6 +105,7 @@ export function diffShapes(before, after) {
   if (JSON.stringify(before.headings) !== JSON.stringify(after.headings))
     changes.push(`headings changed from ${JSON.stringify(before.headings)} to ${JSON.stringify(after.headings)}`);
   if (before.forms.length !== after.forms.length) changes.push(`form count went from ${before.forms.length} to ${after.forms.length}`);
+  if (JSON.stringify(before.frames ?? []) !== JSON.stringify(after.frames ?? [])) changes.push(`iframes on the page went from ${JSON.stringify(before.frames ?? [])} to ${JSON.stringify(after.frames ?? [])}`);
 
   const n = Math.max(before.forms.length, after.forms.length);
   for (let i = 0; i < n; i++) {

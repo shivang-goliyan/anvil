@@ -45,3 +45,11 @@ test('cosmetic keeps what bookings use', () => {
   assert.notEqual(c.fields[0].label, 'Full name');
   assert.equal(applyBreak(c, 'cosmetic').changed, false);
 });
+
+test('harder changes describe themselves', () => {
+  for (const kind of ['js-app', 'iframe', 'sign-in', 'redesign', 'captcha']) {
+    const c = freshConfig();
+    assert.equal(applyBreak(c, kind).changed, true, kind);
+    assert.equal(applyBreak(c, kind).changed, false, kind);
+  }
+});

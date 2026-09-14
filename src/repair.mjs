@@ -1,5 +1,5 @@
 import { openBrowser, scrape, keepAlive } from './anakin.mjs';
-import { runPlan, checkPlanShape } from './plan.mjs';
+import { runPlan, checkPlanShape, contentWithFrames } from './plan.mjs';
 import { checkContract } from './contract.mjs';
 import { pageShape, formMarkup, diffShapes, compactHtml } from './page-shape.mjs';
 import { derivePlan } from './derive.mjs';
@@ -9,6 +9,7 @@ import { loadCapability, sessionOptions, setStatus, promotePlan, booksSomething,
 import { queueRun, Busy } from './jobs.mjs';
 import { shooter } from './shots.mjs';
 import { fitCheck } from './fit.mjs';
+import { repairRead } from './repair-read.mjs';
 
 const MAX_ATTEMPTS = 3;
 // Nothing has failed for these, so first make sure something needs fixing at all.
@@ -34,7 +35,9 @@ async function readEntryPage(cap, session, log) {
     return { html: r.html, via: `url scraper (cached=${r.cached})` };
   }
   await session.page.goto(cap.targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-  return { html: await session.within(10_000, session.page.content(), 'reading the entry page'), via: 'browser session (target not public yet)' };
+  // a page drawn by JavaScript can still be filling in its form right after the document has loaded
+  await session.page.waitForLoadState('load', { timeout: 8000 }).catch(() => {});
+  return { html: await session.within(10_000, contentWithFrames(session.page), 'reading the entry page'), via: 'browser session (target not public yet)' };
 }
 
 // Replace a broken plan. Promotes only on a passing contract, otherwise rolls back and degrades.
@@ -54,6 +57,11 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   if (!cap.contract) {
     log('repair', 'no contract yet, so there is nothing to validate a new plan against');
     return finish('skipped', { diagnosis: 'no contract to validate against' });
+  }
+
+  if (cap.engine === 'scrape') {
+    await db.repairAttempt.update({ where: { id: repairId }, data: { outcome: 'running', fromPlanId: cap.plan.id } });
+    return repairRead(cap, rec, { failure }, log, finish);
   }
 
   inputs ??= cap.contract.goldenSample.inputs;
@@ -115,8 +123,10 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
   // Every page any attempt has seen, so a later attempt never forgets a page an earlier one found.
   const pages = new Map();
   if (stuckOn?.html) pages.set(stuckOn.url, stuckOn.html);
+  // a booking's confirmation page can be opened again without booking, so the model sees a redesigned one from the start
+  let peeked = !(write && lastGood);
   const remember = async (session) => {
-    const html = await session.within(5000, session.page.content(), 'reading the page').catch(() => '');
+    const html = await session.within(5000, contentWithFrames(session.page), 'reading the page').catch(() => '');
     if (html) pages.set(session.page.url(), compactHtml(html, 8000));
     return html;
   };
@@ -131,6 +141,15 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
     let session;
     try {
       session = await openBrowser({ ...sessionOptions(cap), log });
+      if (!peeked) {
+        peeked = true;
+        const opened = await session.page.goto(lastGood.url, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => null);
+        if (opened?.ok()) {
+          await session.page.waitForLoadState('load', { timeout: 8000 }).catch(() => {});
+          await remember(session);
+          log('read', 'opened the confirmation page of the last good booking too, which books nothing, to see how it looks now', { url: lastGood.url, peek: true });
+        }
+      }
       const live = await readEntryPage(cap, session, log);
       const now = pageShape(live.html);
       changes = diffShapes(cap.snapshot?.shape, now.shape);
@@ -208,8 +227,9 @@ export async function executeRepair(repairId, { failure, inputs, stuckOn } = {},
         // 1. everything up to the booking button, and nothing booked
         const missing = result.sent?.missing ?? Object.keys(inputs);
         log('rehearse', missing.length ? `rehearsed up to the booking step, but the page did not hold: ${missing.join(', ')}` : `rehearsed up to the booking step without booking: the page held every detail (${result.sent.found.join(', ')})`, { sent: result.sent, commitIndex: result.commitIndex });
+        // the page the booking button is on, so a later attempt knows which button that is
+        await remember(session);
         if (missing.length) {
-          await remember(session);
           rejections.push(`attempt ${n} filled the form but these inputs were not on the page before booking: ${missing.join(', ')}`);
           continue;
         }
